@@ -1,0 +1,27 @@
+# Binaries and build outputs
+/devscope
+/devscope.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go test binary output
+*.test
+
+# Coverage and profiling output
+*.out
+coverage.out
+cpu.prof
+mem.prof
+
+# Logs
+*.log
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
