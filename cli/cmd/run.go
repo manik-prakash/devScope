@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/example/devscope-cli/internal/agent"
-	"github.com/example/devscope-cli/internal/agent/adapters"
-	"github.com/example/devscope-cli/internal/api"
-	"github.com/example/devscope-cli/internal/config"
-	"github.com/example/devscope-cli/internal/pipeline"
+	"github.com/manik-prakash/devscope-cli/internal/agent"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/config"
+	"github.com/manik-prakash/devscope-cli/internal/pipeline"
 )
 
 var runCmd = &cobra.Command{

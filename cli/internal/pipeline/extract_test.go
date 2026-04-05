@@ -3,7 +3,7 @@ package pipeline
 import (
 	"testing"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
 )
 
 func TestExtractStats_EmptySession(t *testing.T) {

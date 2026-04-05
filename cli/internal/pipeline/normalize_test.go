@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
 )
 
 func TestNormalize_NilSession(t *testing.T) {

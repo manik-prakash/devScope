@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/example/devscope-cli/internal/api"
-	"github.com/example/devscope-cli/internal/config"
+	"github.com/manik-prakash/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/config"
 )
 
 var statusCmd = &cobra.Command{
@@ -54,7 +54,7 @@ backend, count offline queues, and fetch your last 5 telemetry logs mathematical
 		latestVer := checkRelease()
 		if latestVer != "" && latestVer != Version() {
 			fmt.Printf("\n💡 Update available: %s -> %s\n", Version(), latestVer)
-			fmt.Println("   Visit https://github.com/example/devscope-cli to download.")
+			fmt.Println("   Visit https://github.com/manik-prakash/devscope-cli to download.")
 		}
 
 		fmt.Println("\nLoading recent sessions from backend...")
@@ -115,7 +115,7 @@ type githubRelease struct {
 
 func checkRelease() string {
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/example/devscope-cli/releases/latest")
+	resp, err := client.Get("https://api.github.com/repos/manik-prakash/devscope-cli/releases/latest")
 	if err != nil || resp.StatusCode != 200 {
 		return ""
 	}

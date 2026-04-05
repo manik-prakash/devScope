@@ -3,8 +3,8 @@ package pipeline
 import (
 	"sort"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
-	"github.com/example/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
 // ExtractStats calculates behavioral metadata from a sanitized session and file diff.

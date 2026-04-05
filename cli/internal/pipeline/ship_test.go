@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/example/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
 type mockSubmitter struct {

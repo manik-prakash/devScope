@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/example/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
 // SignPayload computes a deterministic HMAC-SHA256 signature for the session payload

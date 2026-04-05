@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/example/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
 // SessionSubmitter defines the interface for backend payload tracking.

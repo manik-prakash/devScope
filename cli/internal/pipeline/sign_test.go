@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/example/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
 func TestSignPayload_Consistency(t *testing.T) {

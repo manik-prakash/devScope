@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/example/devscope-cli/internal/config"
+	"github.com/manik-prakash/devscope-cli/internal/config"
 )
 
 var configCmd = &cobra.Command{

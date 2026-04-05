@@ -14,7 +14,7 @@
 coverage.out
 cpu.prof
 mem.prof
-
+plan.md
 # Logs
 *.log
 

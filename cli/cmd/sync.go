@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/example/devscope-cli/internal/api"
-	"github.com/example/devscope-cli/internal/config"
+	"github.com/manik-prakash/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/config"
 )
 
 var syncCmd = &cobra.Command{

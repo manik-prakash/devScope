@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/example/devscope-cli/cmd"
+	"github.com/manik-prakash/devscope-cli/cmd"
 )
 
 // version is injected at build time via:

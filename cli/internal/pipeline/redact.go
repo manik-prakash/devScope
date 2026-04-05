@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
 )
 
 // builtInPatterns contains common patterns for secrets that should unconditionally be redacted.

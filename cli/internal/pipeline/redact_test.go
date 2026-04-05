@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
 )
 
 func TestRedactSession_NilSession(t *testing.T) {

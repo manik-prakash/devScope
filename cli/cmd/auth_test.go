@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/example/devscope-cli/internal/api"
-	"github.com/example/devscope-cli/internal/config"
+	"github.com/manik-prakash/devscope-cli/internal/api"
+	"github.com/manik-prakash/devscope-cli/internal/config"
 )
 
 // TestAuthFlow_EndToEnd simulates the complete auth flow:

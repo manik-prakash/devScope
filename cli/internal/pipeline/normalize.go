@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/example/devscope-cli/internal/agent/adapters"
+	"github.com/manik-prakash/devscope-cli/internal/agent/adapters"
 )
 
 // Normalize performs in-place generic cleanup and validation on a parsed session
