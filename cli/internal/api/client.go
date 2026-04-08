@@ -51,21 +51,47 @@ type RecentSessionsResponse struct {
 	Sessions []RecentSession `json:"sessions"`
 }
 
+// SanitizedToolCall is the redacted representation of a single tool invocation,
+// safe to transmit to the backend.
+type SanitizedToolCall struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Input           string `json:"input,omitempty"`
+	Output          string `json:"output,omitempty"`
+	IsFileModifying bool   `json:"is_file_modifying"`
+	IsShellCommand  bool   `json:"is_shell_command"`
+	// FilePath is intentionally omitted — paths are never transmitted.
+}
+
+// SanitizedMessage is the redacted representation of a single session message,
+// safe to transmit to the backend. All content has been run through the
+// redaction pipeline before arriving here.
+type SanitizedMessage struct {
+	Role          string              `json:"role"`
+	Content       string              `json:"content"`
+	ContentLength int                 `json:"content_length"`
+	ToolCalls     []SanitizedToolCall `json:"tool_calls,omitempty"`
+	Timestamp     time.Time           `json:"timestamp,omitempty"`
+}
+
 // SessionPayload is the complete signed session object sent to POST /api/v1/sessions.
 // This matches the schema defined in the spec exactly.
 type SessionPayload struct {
-	SessionID    string        `json:"session_id"`
-	UserID       string        `json:"user_id"`
-	OrgID        string        `json:"org_id"`
-	ProjectID    string        `json:"project_id"`
-	Agent        string        `json:"agent"`
-	AgentVersion string        `json:"agent_version"`
-	StartedAt    string        `json:"started_at"`
-	EndedAt      string        `json:"ended_at"`
-	DurationMs   int64         `json:"duration_ms"`
-	Stats        SessionStats  `json:"stats"`
-	CLIVersion   string        `json:"cli_version"`
-	Signature    string        `json:"signature"`
+	SessionID    string             `json:"session_id"`
+	UserID       string             `json:"user_id"`
+	OrgID        string             `json:"org_id"`
+	ProjectID    string             `json:"project_id"`
+	Agent        string             `json:"agent"`
+	AgentVersion string             `json:"agent_version"`
+	StartedAt    string             `json:"started_at"`
+	EndedAt      string             `json:"ended_at"`
+	DurationMs   int64              `json:"duration_ms"`
+	Stats        SessionStats       `json:"stats"`
+	// Messages contains the fully redacted, sanitized session log.
+	// Content and tool I/O have been scrubbed of all secrets before inclusion.
+	Messages     []SanitizedMessage `json:"messages,omitempty"`
+	CLIVersion   string             `json:"cli_version"`
+	Signature    string             `json:"signature"`
 }
 
 // SessionStats holds the behavioral metadata extracted from a session.

@@ -127,6 +127,29 @@ Example:
 
 		stats := pipeline.ExtractStats(sanitized, diff)
 
+		// Map redacted messages into the transmittable shape.
+		// FilePath is intentionally dropped here — only behavioral metadata is sent.
+		sanitizedMessages := make([]api.SanitizedMessage, 0, len(sanitized.Messages))
+		for _, m := range sanitized.Messages {
+			msg := api.SanitizedMessage{
+				Role:          m.Role,
+				Content:       m.Content,
+				ContentLength: m.ContentLength,
+				Timestamp:     m.Timestamp,
+			}
+			for _, tc := range m.ToolCalls {
+				msg.ToolCalls = append(msg.ToolCalls, api.SanitizedToolCall{
+					ID:              tc.ID,
+					Name:            tc.Name,
+					Input:           tc.Input,
+					Output:          tc.Output,
+					IsFileModifying: tc.IsFileModifying,
+					IsShellCommand:  tc.IsShellCommand,
+				})
+			}
+			sanitizedMessages = append(sanitizedMessages, msg)
+		}
+
 		payload := &api.SessionPayload{
 			SessionID:    sanitized.SessionID,
 			UserID:       cfg.UserID,
@@ -138,6 +161,7 @@ Example:
 			EndedAt:      endedAt.Format(time.RFC3339),
 			DurationMs:   int64(durationMs),
 			Stats:        stats,
+			Messages:     sanitizedMessages,
 			CLIVersion:   Version(),
 		}
 
