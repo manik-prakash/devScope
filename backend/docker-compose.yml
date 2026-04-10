@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devscope_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devscope
+      POSTGRES_PASSWORD: devscope
+      POSTGRES_DB: devscope
+    ports:
+      - "5432:5432"
+    volumes:
+      - devscope_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U devscope -d devscope" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  # Uncomment when Redis is added for job queues / caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: devscope_redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - devscope_redisdata:/data
+
+volumes:
+  devscope_pgdata: # devscope_redisdata:
