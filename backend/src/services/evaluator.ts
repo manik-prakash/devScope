@@ -30,7 +30,7 @@ export async function evaluateSession(sessionId: string): Promise<void> {
         'X-Title': 'DevScope Backend',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-4o-mini',
+        model: env.OPENROUTER_MODEL,
         response_format: { type: 'json_object' },
         messages: [
           {

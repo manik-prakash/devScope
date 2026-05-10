@@ -16,12 +16,12 @@ import helmet from 'helmet'
 import cors from 'cors'
 
 import { env, corsOrigins } from './config/env.js'
-import { prismaMiddleware } from './middleware/prismaMiddleware.js'
+import { prismaMiddleware } from './middleware/prisma.js'
 import { AppError } from './utils/errors.js'
 import { logger } from './config/logger.js'
 
 // Routes (mounted after all middleware is registered)
-import v1Router from './routes/v1/index.js'
+import v1Router from './routes/index.js'
 
 // ---------------------------------------------------------------------------
 // App factory
