@@ -28,7 +28,7 @@ declare global {
       user?: {
         userId: string
         orgId: string
-        role: 'MANAGER' | 'DEVELOPER'
+        role: 'ADMIN' | 'MANAGER' | 'DEVELOPER'
         /** Distinguishes JWT (dashboard) from API key (CLI) auth */
         type: 'jwt' | 'apikey'
       }

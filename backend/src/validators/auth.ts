@@ -8,3 +8,8 @@ export const loginSchema = z.object({
 export const refreshSchema = z.object({
   refreshToken: z.string(),
 });
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});

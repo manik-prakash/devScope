@@ -7,7 +7,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, KeyRound } from 'lucide-react'
 import api from '@/lib/api'
+import { persistAuthTokens, decodeJwt } from '@/lib/auth'
 import { Logo } from '@/components/shared'
+import type { AuthTokens } from '@/lib/types'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -76,13 +78,20 @@ export default function ChangePasswordPage() {
     setServerError(null)
     setSuccess(null)
     try {
-      // TODO: replace with real endpoint when backend adds PATCH /developer/me/password
-      await api.patch('/developer/me/password', {
+      const { data: tokens } = await api.post<AuthTokens>('/auth/change-password', {
         currentPassword: data.currentPassword,
         newPassword:     data.newPassword,
       })
-      setSuccess('Password updated successfully.')
-      setTimeout(() => router.push('/me'), 1500)
+
+      // Refresh tokens were revoked server-side; persist the freshly issued pair
+      // and clear the must-change cookie so the proxy stops trapping us here.
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false)
+
+      const role = decodeJwt(tokens.accessToken)?.role
+      setSuccess('Password updated. Redirecting…')
+      setTimeout(() => {
+        router.push(role === 'DEVELOPER' ? '/me' : '/dashboard')
+      }, 800)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -90,6 +99,7 @@ export default function ChangePasswordPage() {
       setServerError(msg)
     }
   }
+
 
   return (
     <div className="w-full max-w-sm">

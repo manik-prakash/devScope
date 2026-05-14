@@ -6,7 +6,7 @@ import { unauthorized } from '../utils/errors.js';
 export interface JwtPayload {
   sub: string;
   orgId: string;
-  role: 'MANAGER' | 'DEVELOPER';
+  role: 'ADMIN' | 'MANAGER' | 'DEVELOPER';
 }
 
 export const requireJwt = (req: Request, res: Response, next: NextFunction) => {

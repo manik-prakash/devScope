@@ -3,9 +3,10 @@ import type { JwtPayload, UserRole } from './types'
 
 // ─── Cookie / storage keys ────────────────────────────────────────────────────
 
-const ACCESS_KEY  = 'ds_access'   // sessionStorage — cleared on tab close
-const REFRESH_KEY = 'ds_refresh'  // 7-day cookie — survives tab close
-const ROLE_KEY    = 'ds_role'     // short-lived cookie — read by proxy.ts for route guards
+const ACCESS_KEY       = 'ds_access'       // sessionStorage — cleared on tab close
+const REFRESH_KEY      = 'ds_refresh'      // 7-day cookie — survives tab close
+const ROLE_KEY         = 'ds_role'         // short-lived cookie — read by proxy.ts for route guards
+const MUST_CHANGE_KEY  = 'ds_must_change'  // short-lived cookie — proxy redirects to /change-password when set
 
 // ─── Access token (sessionStorage) ───────────────────────────────────────────
 
@@ -56,12 +57,27 @@ export function clearRoleCookie(): void {
   Cookies.remove(ROLE_KEY, { sameSite: 'strict' })
 }
 
+// ─── Must-change-password cookie (read by proxy.ts) ──────────────────────────
+
+export function setMustChangeCookie(): void {
+  Cookies.set(MUST_CHANGE_KEY, '1', {
+    expires: 1,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+  })
+}
+
+export function clearMustChangeCookie(): void {
+  Cookies.remove(MUST_CHANGE_KEY, { sameSite: 'strict' })
+}
+
 // ─── Clear everything ─────────────────────────────────────────────────────────
 
 export function clearAllTokens(): void {
   clearAccessToken()
   clearRefreshToken()
   clearRoleCookie()
+  clearMustChangeCookie()
 }
 
 // ─── JWT decoding ─────────────────────────────────────────────────────────────
@@ -89,9 +105,15 @@ export function getUserFromToken(token: string): JwtPayload | null {
 
 // ─── Convenience: store both tokens after login ───────────────────────────────
 
-export function persistAuthTokens(accessToken: string, refreshToken: string): void {
+export function persistAuthTokens(
+  accessToken: string,
+  refreshToken: string,
+  mustChangePass: boolean = false,
+): void {
   setAccessToken(accessToken)
   setRefreshToken(refreshToken)
   const payload = decodeJwt(accessToken)
   if (payload?.role) setRoleCookie(payload.role)
+  if (mustChangePass) setMustChangeCookie()
+  else clearMustChangeCookie()
 }

@@ -1,6 +1,6 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'MANAGER' | 'DEVELOPER'
+export type UserRole = 'ADMIN' | 'MANAGER' | 'DEVELOPER'
 export type EvaluationStatus = 'PENDING' | 'SCORED' | 'FAILED' | 'SKIPPED'
 export type Plan = 'FREE' | 'PRO' | 'ENTERPRISE'
 
@@ -10,11 +10,13 @@ export interface AuthTokens {
   accessToken: string
   refreshToken: string
   expiresIn: string
+  mustChangePass?: boolean
 }
 
 export interface RefreshResponse {
   accessToken: string
   expiresIn: string
+  mustChangePass?: boolean
 }
 
 export interface JwtPayload {

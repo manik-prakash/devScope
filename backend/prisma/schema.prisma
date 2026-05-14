@@ -8,6 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum UserRole {
+  ADMIN
   MANAGER
   DEVELOPER
 }
@@ -42,6 +44,8 @@ model Organization {
   slug      String   @unique
   plan      Plan     @default(FREE)
   seats     Int      @default(5)
+  /// The ADMIN user who registered this org. Nullable so the user/org rows can be inserted in either order during signup; populated in the same transaction.
+  ownerId   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -58,14 +62,16 @@ model Organization {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  orgId        String
-  email        String
-  passwordHash String
-  name         String
-  role         UserRole @default(DEVELOPER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  orgId          String
+  email          String
+  passwordHash   String
+  name           String
+  role           UserRole @default(DEVELOPER)
+  /// Force a password change on next login. Set true when an admin/manager invites a user with a temp password.
+  mustChangePass Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   org            Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   projectMembers ProjectMember[]

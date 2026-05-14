@@ -76,7 +76,13 @@ function LoginForm() {
         password: data.password,
       })
 
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken)
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, tokens.mustChangePass ?? false)
+
+      // First-login users must set a new password before doing anything else
+      if (tokens.mustChangePass) {
+        router.push('/change-password')
+        return
+      }
 
       const payload = decodeJwt(tokens.accessToken)
       const role    = payload?.role
@@ -88,7 +94,7 @@ function LoginForm() {
         return
       }
 
-      router.push(role === 'MANAGER' ? '/dashboard' : '/me')
+      router.push(role === 'DEVELOPER' ? '/me' : '/dashboard')
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error

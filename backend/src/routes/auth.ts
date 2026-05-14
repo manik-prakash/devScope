@@ -8,5 +8,6 @@ const router: ReturnType<typeof Router> = Router();
 router.post('/login', loginRateLimit, authController.login);
 router.post('/refresh', authController.refresh);
 router.post('/logout', requireJwt, authController.logout);
+router.post('/change-password', requireJwt, authController.changePassword);
 
 export default router;

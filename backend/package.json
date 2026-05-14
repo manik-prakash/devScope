@@ -1,7 +1,7 @@
 {
   "name": "@devscope/backend",
   "version": "0.1.0",
-  "description": "DevScope backend API — Express + TypeScript + Prisma",
+  "description": "DevScope backend API",
   "private": true,
   "type": "module",
   "engines": {
