@@ -1,13 +1,15 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FolderOpen, X, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { PageHeader, EmptyState } from '@/components/shared'
 import { ProjectCard } from '@/components/manager/ProjectCard'
-import { useManagerProjects } from '@/lib/queries/projects'
+import { useManagerProjects, MANAGER_PROJECTS_QUERY_KEY } from '@/lib/queries/projects'
 import { useManagerSessions } from '@/lib/queries/sessions'
 import { isWithinDays, average } from '@/lib/utils'
 import api from '@/lib/api'
@@ -185,6 +187,8 @@ function NewProjectModal({ onClose, onCreated }: NewProjectModalProps) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectsPage() {
+  const router       = useRouter()
+  const queryClient  = useQueryClient()
   const [showModal, setShowModal] = useState(false)
 
   const { data: projects = [], isLoading: projLoading } = useManagerProjects()
@@ -268,7 +272,11 @@ export default function ProjectsPage() {
       {showModal && (
         <NewProjectModal
           onClose={() => setShowModal(false)}
-          onCreated={() => {/* TODO: invalidate projects query */}}
+          onCreated={async (project) => {
+            await queryClient.invalidateQueries({ queryKey: MANAGER_PROJECTS_QUERY_KEY })
+            // Jump straight to the new project so the manager can add engineers
+            router.push(`/dashboard/projects/${project.slug}`)
+          }}
         />
       )}
     </div>

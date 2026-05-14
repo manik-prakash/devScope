@@ -1,41 +1,66 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Users, Key, AlertTriangle, Trash2 } from 'lucide-react'
-import { AddDeveloperModal, type NewDeveloperResult } from '@/components/manager/AddDeveloperModal'
+import api from '@/lib/api'
+import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
-import { useManagerUsers } from '@/lib/queries/users'
+import {
+  useManagerUsers,
+  useAdminUsers,
+  ADMIN_USERS_QUERY_KEY,
+  MANAGER_USERS_QUERY_KEY,
+} from '@/lib/queries/users'
 import { useManagerSessions } from '@/lib/queries/sessions'
 import { useManagerOrg } from '@/lib/queries/projects'
+import { getAccessToken, decodeJwt } from '@/lib/auth'
 import { formatRelativeTime, initials } from '@/lib/utils'
+import type { InvitedUserResult, User, UserRole } from '@/lib/types'
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 
 type Tab = 'members' | 'api-keys' | 'danger'
 
-// ─── Role badge (inline, small) ───────────────────────────────────────────────
+// ─── Role badge ───────────────────────────────────────────────────────────────
 
-function RoleBadge({ role }: { role: string }) {
-  const isManager = role === 'MANAGER'
+function RoleBadge({ role }: { role: UserRole }) {
+  const styles: Record<UserRole, { bg: string; fg: string; bd: string; label: string }> = {
+    ADMIN: {
+      bg:    'rgba(217,119,6,0.12)',
+      fg:    '#FCD34D',
+      bd:    'rgba(217,119,6,0.25)',
+      label: 'Admin',
+    },
+    MANAGER: {
+      bg:    'rgba(37,99,235,0.1)',
+      fg:    '#93C5FD',
+      bd:    'rgba(37,99,235,0.2)',
+      label: 'Manager',
+    },
+    DEVELOPER: {
+      bg:    'var(--surface-2)',
+      fg:    'var(--text-muted)',
+      bd:    'var(--border)',
+      label: 'Developer',
+    },
+  }
+  const s = styles[role]
   return (
     <span
       className="rounded-full border px-2 py-0.5 text-xs font-medium"
-      style={{
-        background:  isManager ? 'rgba(37,99,235,0.1)'  : 'var(--surface-2)',
-        color:       isManager ? '#93C5FD'               : 'var(--text-muted)',
-        borderColor: isManager ? 'rgba(37,99,235,0.2)'  : 'var(--border)',
-      }}
+      style={{ background: s.bg, color: s.fg, borderColor: s.bd }}
     >
-      {isManager ? 'Manager' : 'Developer'}
+      {s.label}
     </span>
   )
 }
 
-// ─── Revoke button with inline confirm ───────────────────────────────────────
+// ─── Revoke button (inline confirm) ──────────────────────────────────────────
 
 interface RevokeButtonProps {
-  userId: string
-  name:   string
+  userId:   string
+  name:     string
   onRevoke: (userId: string) => void
 }
 
@@ -44,7 +69,7 @@ function RevokeButton({ userId, name, onRevoke }: RevokeButtonProps) {
 
   if (confirming) {
     return (
-      <span className="flex items-center gap-2">
+      <span className="flex items-center justify-end gap-2">
         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Remove {name}?
         </span>
@@ -83,20 +108,39 @@ function RevokeButton({ userId, name, onRevoke }: RevokeButtonProps) {
 // ─── Members tab ──────────────────────────────────────────────────────────────
 
 interface MembersTabProps {
-  onAddDeveloper: () => void
+  viewerRole:    UserRole | null
+  viewerUserId:  string | null
+  onInviteOpen:  () => void
 }
 
-function MembersTab({ onAddDeveloper }: MembersTabProps) {
-  const { data: users = [],  isLoading: usersLoading }    = useManagerUsers()
-  const { data: sessData }                                 = useManagerSessions(1, 200)
+function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps) {
+  const queryClient = useQueryClient()
+  const isAdmin     = viewerRole === 'ADMIN'
+
+  // Admin pulls the canonical org-wide list from /admin/users (includes mustChangePass).
+  // Managers fall back to /manager/users.
+  const adminQuery   = useAdminUsers(isAdmin)
+  const managerQuery = useManagerUsers(!isAdmin && viewerRole !== null)
+  const users        = (isAdmin ? adminQuery.data : managerQuery.data) ?? []
+  const usersLoading = isAdmin ? adminQuery.isLoading : managerQuery.isLoading
+
+  const { data: sessData } = useManagerSessions(1, 200)
   const sessions = sessData?.sessions ?? []
 
-  function handleRevoke(userId: string) {
-    // TODO: DELETE /manager/users/:userId when backend adds endpoint
-    console.log('[STUB] Revoke user:', userId)
+  async function handleRevoke(userId: string) {
+    try {
+      await api.delete(`/admin/users/${userId}`)
+      await queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY })
+      await queryClient.invalidateQueries({ queryKey: MANAGER_USERS_QUERY_KEY })
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? 'Failed to remove user'
+      // Surface via alert for now — Settings has no toast system yet
+      window.alert(msg)
+    }
   }
 
-  // Compute last active per user from sessions
   function lastActive(userId: string): string | null {
     const mine = sessions.filter((s) => s.userId === userId)
     if (!mine.length) return null
@@ -116,15 +160,17 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
             {users.length} member{users.length !== 1 ? 's' : ''} in your organisation
           </p>
         </div>
-        <button
-          onClick={onAddDeveloper}
-          className="h-9 rounded px-4 text-sm font-medium text-white transition-colors duration-150"
-          style={{ background: 'var(--accent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
-        >
-          Add developer
-        </button>
+        {isAdmin && (
+          <button
+            onClick={onInviteOpen}
+            className="h-9 rounded px-4 text-sm font-medium text-white transition-colors duration-150"
+            style={{ background: 'var(--accent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+          >
+            Add manager
+          </button>
+        )}
       </div>
 
       <div
@@ -146,7 +192,7 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Member', 'Role', 'Last active', ''].map((h) => (
+                  {['Member', 'Role', 'Status', 'Last active', ''].map((h) => (
                     <th
                       key={h}
                       className="px-4 pb-2 pt-0 text-left text-xs font-medium"
@@ -158,8 +204,11 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
-                  const la = lastActive(user.id)
+                {users.map((user: User) => {
+                  const la         = lastActive(user.id)
+                  const isSelf     = user.id === viewerUserId
+                  const isOtherAdmin = user.role === 'ADMIN' && !isSelf
+                  const canRevoke  = isAdmin && !isSelf && !isOtherAdmin
                   return (
                     <tr key={user.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td className={COL}>
@@ -171,7 +220,9 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
                             {initials(user.name)}
                           </span>
                           <div>
-                            <p className="font-medium" style={{ color: 'var(--text)' }}>{user.name}</p>
+                            <p className="font-medium" style={{ color: 'var(--text)' }}>
+                              {user.name}{isSelf && <span style={{ color: 'var(--text-faint)' }}> (you)</span>}
+                            </p>
                             <p className="text-xs" style={{ color: 'var(--text-faint)' }}>{user.email}</p>
                           </div>
                         </div>
@@ -179,15 +230,33 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
                       <td className={COL}>
                         <RoleBadge role={user.role} />
                       </td>
+                      <td className={COL}>
+                        {user.mustChangePass ? (
+                          <span
+                            className="rounded-full border px-2 py-0.5 text-xs"
+                            style={{
+                              background:  'rgba(217,119,6,0.08)',
+                              color:       '#FCD34D',
+                              borderColor: 'rgba(217,119,6,0.2)',
+                            }}
+                          >
+                            Pending first login
+                          </span>
+                        ) : (
+                          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>Active</span>
+                        )}
+                      </td>
                       <td className={COL} style={{ color: 'var(--text-faint)' }}>
                         {la ? formatRelativeTime(la) : '—'}
                       </td>
                       <td className={`${COL} text-right`}>
-                        <RevokeButton
-                          userId={user.id}
-                          name={user.name}
-                          onRevoke={handleRevoke}
-                        />
+                        {canRevoke && (
+                          <RevokeButton
+                            userId={user.id}
+                            name={user.name}
+                            onRevoke={handleRevoke}
+                          />
+                        )}
                       </td>
                     </tr>
                   )
@@ -197,6 +266,13 @@ function MembersTab({ onAddDeveloper }: MembersTabProps) {
           </div>
         )}
       </div>
+
+      {!isAdmin && (
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+          Only admins can add or remove organisation members. Engineers are added via a project — go
+          to Projects → [your project] → Add engineer.
+        </p>
+      )}
     </div>
   )
 }
@@ -241,7 +317,7 @@ function DangerTab() {
 
   function handleDelete() {
     if (!isMatch) return
-    // TODO: DELETE /manager/org when backend adds endpoint
+    // TODO: DELETE /admin/org when backend adds endpoint
     console.log('[STUB] Delete org:', org?.id)
     setConfirmed(true)
   }
@@ -340,13 +416,30 @@ const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
 ]
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab]           = useState<Tab>('members')
-  const [showAddModal, setShowAddModal]     = useState(false)
-  const [tempResult, setTempResult]         = useState<NewDeveloperResult | null>(null)
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab]   = useState<Tab>('members')
+  const [showInvite, setShowInvite] = useState(false)
+  const [tempResult, setTempResult] = useState<InvitedUserResult | null>(null)
 
-  function handleCreated(result: NewDeveloperResult) {
-    setShowAddModal(false)
-    setTempResult(result)
+  // Decode the current user's role from the access token. The Sidebar uses the
+  // same pattern; both run client-side after hydration.
+  const [viewerRole, setViewerRole]     = useState<UserRole | null>(null)
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null)
+  useEffect(() => {
+    const token = getAccessToken()
+    if (!token) return
+    const payload = decodeJwt(token)
+    if (!payload) return
+    setViewerRole(payload.role)
+    setViewerUserId(payload.sub)
+  }, [])
+
+  async function handleInvited(result: InvitedUserResult) {
+    setShowInvite(false)
+    // Admin invites always create a new user, so tempPassword is always set.
+    if (result.tempPassword) setTempResult(result)
+    await queryClient.invalidateQueries({ queryKey: ADMIN_USERS_QUERY_KEY })
+    await queryClient.invalidateQueries({ queryKey: MANAGER_USERS_QUERY_KEY })
   }
 
   return (
@@ -402,23 +495,33 @@ export default function SettingsPage() {
 
         {/* Right content */}
         <div className="min-w-0 flex-1">
-          {activeTab === 'members'  && <MembersTab onAddDeveloper={() => setShowAddModal(true)} />}
+          {activeTab === 'members'  && (
+            <MembersTab
+              viewerRole={viewerRole}
+              viewerUserId={viewerUserId}
+              onInviteOpen={() => setShowInvite(true)}
+            />
+          )}
           {activeTab === 'api-keys' && <ApiKeysTab />}
           {activeTab === 'danger'   && <DangerTab />}
         </div>
       </div>
 
       {/* Modals */}
-      {showAddModal && (
-        <AddDeveloperModal
-          onClose={() => setShowAddModal(false)}
-          onCreated={handleCreated}
+      {showInvite && (
+        <InviteUserModal
+          title="Add manager"
+          submitLabel="Send invite"
+          endpoint="/admin/users"
+          extraBody={{ role: 'MANAGER' }}
+          onClose={() => setShowInvite(false)}
+          onSuccess={handleInvited}
         />
       )}
 
-      {tempResult && (
+      {tempResult && tempResult.tempPassword && (
         <TempPasswordModal
-          result={tempResult}
+          result={{ ...tempResult, tempPassword: tempResult.tempPassword }}
           onClose={() => setTempResult(null)}
         />
       )}

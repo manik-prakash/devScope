@@ -7,6 +7,8 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import api from '@/lib/api'
+import { persistAuthTokens } from '@/lib/auth'
+import type { AuthTokens } from '@/lib/types'
 
 // ─── Reusable field ───────────────────────────────────────────────────────────
 
@@ -112,7 +114,6 @@ function ProfileSection({ initialName, initialEmail }: ProfileSectionProps) {
     setServerError(null)
     setSuccess(null)
     try {
-      // TODO: replace with real endpoint when backend adds PATCH /developer/me
       await api.patch('/developer/me', { name: data.name })
       setSuccess('Saved!')
       // Update sessionStorage user info so the topnav reflects the new name
@@ -203,11 +204,13 @@ function PasswordSection() {
     setServerError(null)
     setSuccess(null)
     try {
-      // TODO: replace with real endpoint when backend adds PATCH /developer/me/password
-      await api.patch('/developer/me/password', {
+      const { data: tokens } = await api.post<AuthTokens>('/auth/change-password', {
         currentPassword: data.currentPassword,
         newPassword:     data.newPassword,
       })
+      // The server revoked the old refresh tokens and issued a new pair;
+      // persist them so subsequent requests don't 401 once the old access token expires.
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false)
       setSuccess('Password updated.')
       reset()
       setTimeout(() => setSuccess(null), 3000)

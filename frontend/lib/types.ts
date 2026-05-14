@@ -55,7 +55,21 @@ export interface User {
   name: string
   role: UserRole
   orgId?: string
+  mustChangePass?: boolean
   createdAt: string
+}
+
+// ─── Invite result ────────────────────────────────────────────────────────────
+
+export interface InvitedUserResult {
+  id:           string
+  name:         string
+  email:        string
+  role:         UserRole
+  /** Present when the backend created a fresh user. Null when an existing user was just added to a new project. */
+  tempPassword: string | null
+  /** True if the user already existed and was simply added to a project (Phase 4 path). */
+  isExisting?: boolean
 }
 
 // ─── Project ──────────────────────────────────────────────────────────────────
@@ -67,6 +81,33 @@ export interface Project {
   slug: string
   createdAt: string
   updatedAt: string
+  /** Populated by GET /manager/projects */
+  _count?: {
+    members:  number
+    sessions: number
+  }
+}
+
+// Returned by GET /manager/projects/:slug (detail view)
+export interface ProjectMember {
+  projectId: string
+  userId:    string
+  role:      UserRole
+  createdAt: string
+  user: {
+    id:             string
+    name:           string
+    email:          string
+    role:           UserRole
+    mustChangePass: boolean
+  }
+}
+
+export interface ProjectDetail extends Omit<Project, '_count'> {
+  members: ProjectMember[]
+  _count: {
+    sessions: number
+  }
 }
 
 // ─── API Keys ─────────────────────────────────────────────────────────────────

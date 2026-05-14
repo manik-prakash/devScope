@@ -5,93 +5,64 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2 } from 'lucide-react'
+import api from '@/lib/api'
+import { Field } from '@/components/auth/Field'
+import type { InvitedUserResult } from '@/lib/types'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const schema = z.object({
   name:  z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Enter a valid email'),
-  role:  z.enum(['MANAGER', 'DEVELOPER']),
 })
 
 type FormData = z.infer<typeof schema>
 
-// ─── Result passed to parent ──────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
-export interface NewDeveloperResult {
-  name:         string
-  email:        string
-  tempPassword: string
-}
-
-// ─── Field component ──────────────────────────────────────────────────────────
-
-interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string
-  error?: string
-}
-
-function Field({ label, error, id, ...props }: FieldProps) {
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-medium" style={{ color: 'var(--text)' }}>
-        {label}
-      </label>
-      <input
-        id={id}
-        className="w-full rounded border px-3 text-sm outline-none transition-colors duration-150"
-        style={{
-          height:      '36px',
-          background:  'var(--surface-2)',
-          color:       'var(--text)',
-          borderColor: error ? 'var(--danger)' : 'var(--border)',
-        }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = error ? 'var(--danger)' : 'var(--accent)' }}
-        onBlur={(e)  => { e.currentTarget.style.borderColor = error ? 'var(--danger)' : 'var(--border)' }}
-        {...props}
-      />
-      {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
-    </div>
-  )
+interface InviteUserModalProps {
+  /** Modal title text (e.g. "Add manager" or "Add engineer"). */
+  title:       string
+  /** Submit-button label (e.g. "Send invite"). */
+  submitLabel: string
+  /** API endpoint to POST to. Body is `{ name, email, ...extraBody }`. */
+  endpoint:    string
+  /** Extra fields to merge into the POST body — e.g. `{ role: 'MANAGER' }`. */
+  extraBody?:  Record<string, unknown>
+  onClose:     () => void
+  onSuccess:   (result: InvitedUserResult) => void
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-interface AddDeveloperModalProps {
-  onClose:   () => void
-  onCreated: (result: NewDeveloperResult) => void
-}
-
-export function AddDeveloperModal({ onClose, onCreated }: AddDeveloperModalProps) {
+export function InviteUserModal({
+  title,
+  submitLabel,
+  endpoint,
+  extraBody,
+  onClose,
+  onSuccess,
+}: InviteUserModalProps) {
   const [serverError, setServerError] = useState<string | null>(null)
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { role: 'DEVELOPER' },
-  })
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   async function onSubmit(data: FormData) {
     setServerError(null)
     try {
-      // TODO: replace with POST /manager/users when backend adds the endpoint
-      await new Promise((r) => setTimeout(r, 400))  // simulate network
-
-      // Generate a temporary password (backend would normally do this)
-      const chars    = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-      const password = 'Tmp@' + Array.from(
-        { length: 8 },
-        () => chars[Math.floor(Math.random() * chars.length)],
-      ).join('')
-
-      onCreated({ name: data.name, email: data.email, tempPassword: password })
+      const { data: result } = await api.post<InvitedUserResult>(endpoint, {
+        ...data,
+        ...extraBody,
+      })
+      onSuccess(result)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        ?? 'Failed to add developer'
+        ?? 'Failed to send invite'
       setServerError(msg)
     }
   }
@@ -110,7 +81,7 @@ export function AddDeveloperModal({ onClose, onCreated }: AddDeveloperModalProps
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-            Add developer
+            {title}
           </h2>
           <button
             onClick={onClose}
@@ -118,6 +89,7 @@ export function AddDeveloperModal({ onClose, onCreated }: AddDeveloperModalProps
             style={{ color: 'var(--text-faint)' }}
             onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-faint)' }}
+            aria-label="Close"
           >
             <X size={14} />
           </button>
@@ -139,30 +111,6 @@ export function AddDeveloperModal({ onClose, onCreated }: AddDeveloperModalProps
             error={errors.email?.message}
             {...register('email')}
           />
-
-          {/* Role */}
-          <div className="space-y-1.5">
-            <label htmlFor="role" className="block text-sm font-medium" style={{ color: 'var(--text)' }}>
-              Role
-            </label>
-            <select
-              id="role"
-              className="w-full rounded border px-3 text-sm outline-none transition-colors duration-150"
-              style={{
-                height:      '36px',
-                background:  'var(--surface-2)',
-                borderColor: 'var(--border)',
-                color:       'var(--text)',
-              }}
-              {...register('role')}
-            >
-              <option value="DEVELOPER">Developer</option>
-              <option value="MANAGER">Manager</option>
-            </select>
-            {errors.role && (
-              <p className="text-xs" style={{ color: 'var(--danger)' }}>{errors.role.message}</p>
-            )}
-          </div>
 
           {serverError && (
             <p
@@ -199,13 +147,13 @@ export function AddDeveloperModal({ onClose, onCreated }: AddDeveloperModalProps
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex h-9 flex-1 items-center justify-center gap-2 rounded text-sm font-medium text-white transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex h-9 flex-1 items-center justify-center gap-2 rounded text-sm font-medium text-white transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40"
               style={{ background: 'var(--accent)' }}
               onMouseEnter={(e) => { if (!isSubmitting) e.currentTarget.style.background = 'var(--accent-hover)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
             >
               {isSubmitting && <Loader2 size={13} className="animate-spin" />}
-              Add developer
+              {submitLabel}
             </button>
           </div>
         </form>

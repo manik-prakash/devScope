@@ -9,6 +9,7 @@ import { Loader2, KeyRound } from 'lucide-react'
 import api from '@/lib/api'
 import { persistAuthTokens, decodeJwt } from '@/lib/auth'
 import { Logo } from '@/components/shared'
+import { Field } from '@/components/auth/Field'
 import type { AuthTokens } from '@/lib/types'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -25,41 +26,6 @@ const schema = z
   })
 
 type FormData = z.infer<typeof schema>
-
-// ─── Reusable field ───────────────────────────────────────────────────────────
-
-interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string
-  error?: string
-}
-
-function Field({ label, error, id, ...props }: FieldProps) {
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-medium" style={{ color: 'var(--text)' }}>
-        {label}
-      </label>
-      <input
-        id={id}
-        className="w-full rounded border px-3 text-sm outline-none transition-colors duration-150"
-        style={{
-          height:      '36px',
-          background:  'var(--surface-2)',
-          color:       'var(--text)',
-          borderColor: error ? 'var(--danger)' : 'var(--border)',
-        }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = error ? 'var(--danger)' : 'var(--accent)' }}
-        onBlur={(e)  => { e.currentTarget.style.borderColor = error ? 'var(--danger)' : 'var(--border)' }}
-        {...props}
-      />
-      {error && (
-        <p className="text-xs" style={{ color: 'var(--danger)' }}>
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 

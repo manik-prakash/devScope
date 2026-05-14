@@ -4,8 +4,8 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { type PrismaClient, type User } from '@prisma/client';
 import { env } from '../config/env.js';
-import { unauthorized } from '../utils/errors.js';
-import { loginSchema, refreshSchema, changePasswordSchema } from '../validators/auth.js';
+import { unauthorized, conflict } from '../utils/errors.js';
+import { loginSchema, refreshSchema, changePasswordSchema, registerSchema } from '../validators/auth.js';
 
 interface IssuedTokens {
   accessToken: string;
@@ -106,6 +106,45 @@ export const logout = async (req: Request, res: Response) => {
   });
 
   res.status(204).end();
+};
+
+export const register = async (req: Request, res: Response) => {
+  const { orgName, orgSlug, name, email, password } = registerSchema.parse(req.body);
+
+  const slugTaken = await req.prisma.organization.findUnique({ where: { slug: orgSlug } });
+  if (slugTaken) throw conflict('Organization slug already taken', 'ORG_SLUG_TAKEN');
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // Create org + admin user + backfill ownerId atomically. We use the interactive
+  // form because the org.update needs the just-created user.id.
+  const user = await req.prisma.$transaction(async (tx) => {
+    const org = await tx.organization.create({
+      data: { name: orgName, slug: orgSlug, plan: 'FREE', seats: 5 },
+    });
+    const created = await tx.user.create({
+      data: {
+        orgId: org.id,
+        email,
+        name,
+        role: 'ADMIN',
+        passwordHash,
+        mustChangePass: false,
+      },
+    });
+    await tx.organization.update({
+      where: { id: org.id },
+      data: { ownerId: created.id },
+    });
+    return created;
+  });
+
+  const tokens = await issueTokens(user, req.prisma);
+
+  res.status(201).json({
+    ...tokens,
+    mustChangePass: false,
+  });
 };
 
 export const changePassword = async (req: Request, res: Response) => {

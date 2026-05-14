@@ -1,20 +1,15 @@
 'use client'
 
-'use client'
-
+import Link from 'next/link'
 import { useState } from 'react'
-import { Search, Users, UserPlus } from 'lucide-react'
+import { Search, Users, FolderOpen } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared'
 import { DeveloperTable } from '@/components/manager/DeveloperTable'
-import { AddDeveloperModal, type NewDeveloperResult } from '@/components/manager/AddDeveloperModal'
-import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
 import { useManagerUsers } from '@/lib/queries/users'
 import { useManagerSessions } from '@/lib/queries/sessions'
 
 export default function TeamPage() {
-  const [search, setSearch]       = useState('')
-  const [showAddModal, setShowAdd] = useState(false)
-  const [tempResult, setTempResult] = useState<NewDeveloperResult | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: users = [],    isLoading: usersLoading }   = useManagerUsers()
   const { data: sessData,      isLoading: sessionsLoading } = useManagerSessions(1, 200)
@@ -28,16 +23,16 @@ export default function TeamPage() {
         title="Team"
         subtitle={isLoading ? undefined : `${users.length} member${users.length !== 1 ? 's' : ''}`}
         action={
-          <button
-            className="flex h-9 items-center gap-2 rounded px-4 text-sm font-medium text-white transition-colors duration-150"
-            style={{ background: 'var(--accent)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
-            onClick={() => setShowAdd(true)}
+          <Link
+            href="/dashboard/projects"
+            className="flex h-9 items-center gap-2 rounded border px-4 text-sm font-medium transition-colors duration-150"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
           >
-            <UserPlus size={14} />
-            Add developer
-          </button>
+            <FolderOpen size={14} />
+            Add engineers via a project
+          </Link>
         }
       />
 
@@ -95,19 +90,6 @@ export default function TeamPage() {
         )}
       </div>
 
-      {showAddModal && (
-        <AddDeveloperModal
-          onClose={() => setShowAdd(false)}
-          onCreated={(result) => { setShowAdd(false); setTempResult(result) }}
-        />
-      )}
-
-      {tempResult && (
-        <TempPasswordModal
-          result={tempResult}
-          onClose={() => setTempResult(null)}
-        />
-      )}
     </div>
   )
 }

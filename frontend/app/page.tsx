@@ -99,7 +99,7 @@ function Hero() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href="/login"
+              href="/signup"
               className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-white transition-colors duration-150"
               style={{ background: 'var(--accent)' }}
             >

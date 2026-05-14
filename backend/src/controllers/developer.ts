@@ -1,6 +1,19 @@
 import { type Request, type Response } from 'express';
 import crypto from 'crypto';
 import { notFound } from '../utils/errors.js';
+import { updateMeSchema } from '../validators/developer.js';
+
+export const updateMe = async (req: Request, res: Response) => {
+  const { name } = updateMeSchema.parse(req.body);
+
+  const updated = await req.prisma.user.update({
+    where: { id: req.user!.userId },
+    data: { name },
+    select: { id: true, name: true, email: true, role: true, mustChangePass: true },
+  });
+
+  res.json(updated);
+};
 
 export const getSessions = async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;

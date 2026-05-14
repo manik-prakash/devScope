@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Copy, Check, AlertTriangle } from 'lucide-react'
-import type { NewDeveloperResult } from './AddDeveloperModal'
+import type { InvitedUserResult } from '@/lib/types'
 
 // ─── Copy button ──────────────────────────────────────────────────────────────
 
@@ -69,7 +69,8 @@ function CredentialRow({ label, value, mono = false }: { label: string; value: s
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 interface TempPasswordModalProps {
-  result:  NewDeveloperResult
+  /** Caller must only open this modal when tempPassword was returned (new user, not an existing one being added to another project). */
+  result:  Omit<InvitedUserResult, 'tempPassword'> & { tempPassword: string }
   onClose: () => void
 }
 

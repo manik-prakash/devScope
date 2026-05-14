@@ -162,7 +162,7 @@ export function Nav() {
             Sign in
           </Link>
           <Link
-            href="/login"
+            href="/signup"
             className="rounded-full px-4 py-1.5 text-sm font-medium text-white transition-colors duration-150"
             style={{ background: 'var(--accent)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)' }}

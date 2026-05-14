@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
-import type { Organization, Project } from '@/lib/types'
+import type { Organization, Project, ProjectDetail } from '@/lib/types'
 
 // ─── Org ──────────────────────────────────────────────────────────────────────
 
+export const MANAGER_ORG_QUERY_KEY = ['manager', 'org'] as const
+
 export function useManagerOrg() {
   return useQuery({
-    queryKey: ['manager', 'org'],
+    queryKey: MANAGER_ORG_QUERY_KEY,
     queryFn: async () => {
       const { data } = await api.get<Organization>('/manager/org')
       return data
@@ -15,48 +17,39 @@ export function useManagerOrg() {
   })
 }
 
-// ─── Projects — STUB (GET /manager/projects not yet in backend) ───────────────
+// ─── Projects list ────────────────────────────────────────────────────────────
 
-const STUB_PROJECTS: Project[] = [
-  {
-    id:        'proj_stub_1',
-    orgId:     'org_stub',
-    name:      'Web Platform',
-    slug:      'web-platform',
-    createdAt: new Date(Date.now() - 30 * 86400_000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id:        'proj_stub_2',
-    orgId:     'org_stub',
-    name:      'Mobile App',
-    slug:      'mobile-app',
-    createdAt: new Date(Date.now() - 60 * 86400_000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-]
+interface ProjectsResponse {
+  projects: Project[]
+}
+
+export const MANAGER_PROJECTS_QUERY_KEY = ['manager', 'projects'] as const
 
 export function useManagerProjects() {
   return useQuery({
-    queryKey: ['manager', 'projects'],
-    // TODO: replace with real API call when GET /manager/projects is added
-    queryFn: async (): Promise<Project[]> => {
-      await new Promise((r) => setTimeout(r, 0)) // keep async shape
-      return STUB_PROJECTS
+    queryKey: MANAGER_PROJECTS_QUERY_KEY,
+    queryFn: async () => {
+      const { data } = await api.get<ProjectsResponse>('/manager/projects')
+      return data.projects
     },
-    staleTime: 300_000,
+    staleTime: 60_000,
   })
 }
 
+// ─── Single project (detail with members) ─────────────────────────────────────
+
+export const managerProjectQueryKey = (slug: string | null) =>
+  ['manager', 'project', slug] as const
+
 export function useManagerProject(slug: string | null) {
   return useQuery({
-    queryKey: ['manager', 'project', slug],
-    // TODO: replace with GET /manager/projects/:slug
-    queryFn: async (): Promise<Project | null> => {
-      await new Promise((r) => setTimeout(r, 0))
-      return STUB_PROJECTS.find((p) => p.slug === slug) ?? null
+    queryKey: managerProjectQueryKey(slug),
+    queryFn: async (): Promise<ProjectDetail | null> => {
+      if (!slug) return null
+      const { data } = await api.get<ProjectDetail>(`/manager/projects/${slug}`)
+      return data
     },
     enabled: !!slug,
-    staleTime: 300_000,
+    staleTime: 60_000,
   })
 }

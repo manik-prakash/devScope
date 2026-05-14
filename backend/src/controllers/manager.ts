@@ -1,6 +1,9 @@
 import { type Request, type Response } from 'express';
-import { notFound } from '../utils/errors.js';
-import { createProjectSchema } from '../validators/manager.js';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
+import { conflict, forbidden, notFound } from '../utils/errors.js';
+import { createProjectSchema, inviteEngineerSchema } from '../validators/manager.js';
 
 export const getOrg = async (req: Request, res: Response) => {
   const org = await req.prisma.organization.findUnique({
@@ -12,7 +15,7 @@ export const getOrg = async (req: Request, res: Response) => {
     }
   });
 
-  if (!org) throw notFound('Organization not found');
+  if (!org) throw notFound('Organization');
 
   res.json({
     id: org.id,
@@ -32,25 +35,165 @@ export const getUsers = async (req: Request, res: Response) => {
       email: true,
       name: true,
       role: true,
+      mustChangePass: true,
       createdAt: true,
-    }
+    },
+    orderBy: { createdAt: 'asc' },
   });
 
   res.json({ users });
 };
 
+export const getProjects = async (req: Request, res: Response) => {
+  // Admins see every project in the org; managers only see ones they're a member of.
+  const where: Prisma.ProjectWhereInput = req.user!.role === 'ADMIN'
+    ? { orgId: req.user!.orgId }
+    : { orgId: req.user!.orgId, members: { some: { userId: req.user!.userId } } };
+
+  const projects = await req.prisma.project.findMany({
+    where,
+    include: {
+      _count: { select: { members: true, sessions: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({ projects });
+};
+
+export const getProjectBySlug = async (req: Request, res: Response) => {
+  const slug = req.params['slug'] as string;
+
+  const project = await req.prisma.project.findFirst({
+    where: { orgId: req.user!.orgId, slug },
+    include: {
+      members: {
+        include: {
+          user: { select: { id: true, name: true, email: true, role: true, mustChangePass: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+      _count: { select: { sessions: true } },
+    },
+  });
+
+  if (!project) throw notFound('Project');
+
+  // Admins can view any project in their org; managers/developers must be members.
+  const isMember = project.members.some((m) => m.userId === req.user!.userId);
+  if (!isMember && req.user!.role !== 'ADMIN') {
+    throw forbidden('You are not a member of this project');
+  }
+
+  res.json(project);
+};
+
 export const createProject = async (req: Request, res: Response) => {
   const { name, slug } = createProjectSchema.parse(req.body);
 
-  const project = await req.prisma.project.create({
-    data: {
-      name,
-      slug,
-      orgId: req.user!.orgId,
+  try {
+    const project = await req.prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: { name, slug, orgId: req.user!.orgId },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: created.id,
+          userId:    req.user!.userId,
+          role:      'MANAGER',
+        },
+      });
+      return created;
+    });
+
+    res.status(201).json(project);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw conflict('A project with this slug already exists', 'PROJECT_SLUG_TAKEN');
     }
+    throw err;
+  }
+};
+
+export const addProjectMember = async (req: Request, res: Response) => {
+  const projectId = req.params['projectId'] as string;
+  const { name, email } = inviteEngineerSchema.parse(req.body);
+
+  // The caller must be a member of this project (any role)
+  const project = await req.prisma.project.findFirst({
+    where: { id: projectId, orgId: req.user!.orgId },
+    include: {
+      members: { where: { userId: req.user!.userId }, select: { userId: true } },
+    },
+  });
+  if (!project) throw notFound('Project');
+  if (project.members.length === 0 && req.user!.role !== 'ADMIN') {
+    throw forbidden('You are not a member of this project');
+  }
+
+  // Does a user with this email already exist in the org?
+  const existing = await req.prisma.user.findUnique({
+    where: { orgId_email: { orgId: req.user!.orgId, email } },
+    select: { id: true, name: true, email: true, role: true },
   });
 
-  res.status(201).json(project);
+  if (existing) {
+    const alreadyMember = await req.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: existing.id } },
+    });
+    if (alreadyMember) {
+      throw conflict(`${existing.name} is already a member of this project`, 'ALREADY_MEMBER');
+    }
+    await req.prisma.projectMember.create({
+      data: { projectId, userId: existing.id, role: existing.role },
+    });
+    res.status(201).json({
+      id:           existing.id,
+      name:         existing.name,
+      email:        existing.email,
+      role:         existing.role,
+      tempPassword: null,
+      isExisting:   true,
+    });
+    return;
+  }
+
+  // Fresh user — create with temp password + ProjectMember in one transaction
+  const tempPassword = crypto.randomBytes(9).toString('base64url');
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  try {
+    const created = await req.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          orgId: req.user!.orgId,
+          email,
+          name,
+          role: 'DEVELOPER',
+          passwordHash,
+          mustChangePass: true,
+        },
+      });
+      await tx.projectMember.create({
+        data: { projectId, userId: user.id, role: 'DEVELOPER' },
+      });
+      return user;
+    });
+
+    res.status(201).json({
+      id:           created.id,
+      name:         created.name,
+      email:        created.email,
+      role:         created.role,
+      tempPassword,
+      isExisting:   false,
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw conflict('A user with this email already exists in your organization', 'EMAIL_TAKEN');
+    }
+    throw err;
+  }
 };
 
 export const getSessions = async (req: Request, res: Response) => {
@@ -96,7 +239,7 @@ export const getSessionById = async (req: Request, res: Response) => {
   });
 
   if (!session || session.orgId !== req.user!.orgId) {
-    throw notFound('Session not found');
+    throw notFound('Session');
   }
 
   res.json({

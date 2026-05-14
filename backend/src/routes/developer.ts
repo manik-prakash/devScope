@@ -6,8 +6,10 @@ import * as developerController from '../controllers/developer.js';
 const router: IRouter = Router();
 
 router.use(requireJwt);
-router.use(requireRole('DEVELOPER', 'MANAGER'));
+// Admins inherit developer-scope capabilities (their own sessions, API keys, profile).
+router.use(requireRole('ADMIN', 'MANAGER', 'DEVELOPER'));
 
+router.patch('/me', developerController.updateMe);
 router.get('/sessions', developerController.getSessions);
 router.get('/sessions/:sessionId', developerController.getSessionById);
 router.get('/api-keys', developerController.getApiKeys);

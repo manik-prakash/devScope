@@ -18,6 +18,25 @@ import { initials } from '@/lib/utils'
 import { Logo } from '@/components/shared'
 import api from '@/lib/api'
 
+// ─── Role pill ────────────────────────────────────────────────────────────────
+
+function RolePill({ role }: { role?: string }) {
+  if (!role) return null
+  const isAdmin = role === 'ADMIN'
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+      style={{
+        background: isAdmin ? 'rgba(217,119,6,0.12)'  : 'var(--accent-dim)',
+        color:      isAdmin ? '#FCD34D'               : 'var(--accent)',
+        border:     isAdmin ? '1px solid rgba(217,119,6,0.25)' : '1px solid rgba(37,99,235,0.2)',
+      }}
+    >
+      {isAdmin ? 'Admin' : 'Manager'}
+    </span>
+  )
+}
+
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
 const NAV = [
@@ -121,16 +140,7 @@ export function Sidebar() {
       {/* Logo + role pill */}
       <div className="flex h-14 items-center gap-2.5 border-b px-4" style={{ borderColor: 'var(--border)' }}>
         <Logo size={22} />
-        <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-          style={{
-            background:  'var(--accent-dim)',
-            color:       'var(--accent)',
-            border:      '1px solid rgba(37,99,235,0.2)',
-          }}
-        >
-          Manager
-        </span>
+        <RolePill role={user?.role} />
       </div>
 
       {/* Navigation */}
