@@ -1,7 +1,7 @@
 import { type Request, type Response } from 'express';
 import { verifySignature } from '../utils/crypto.js';
 import { forbidden } from '../utils/errors.js';
-import { evaluateSession } from '../services/evaluator.js';
+import { evaluatePipeline } from '../services/evaluator/index.js';
 import { SessionPayloadSchema } from '../validators/cli.js';
 
 export const getMe = async (req: Request, res: Response) => {
@@ -85,10 +85,15 @@ export const createSession = async (req: Request, res: Response) => {
   });
 
   if (signatureValid) {
-    // Fire and forget evaluation
-    evaluateSession(session.id).catch(err =>
-      console.error(`Evaluation failed for ${session.id}:`, err)
-    );
+    // Synchronous multi-stage pipeline. The orchestrator never throws —
+    // every internal failure is downgraded to a fallback — but we still
+    // guard against unexpected Prisma write errors so the CLI always sees
+    // a 202 once the session has been persisted.
+    try {
+      await evaluatePipeline(session.id);
+    } catch (err) {
+      console.error(`Evaluation pipeline crashed for ${session.id}:`, err);
+    }
   }
 
   res.status(202).json({ session_id: session.id });

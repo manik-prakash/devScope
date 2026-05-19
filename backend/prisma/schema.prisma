@@ -34,6 +34,12 @@ enum EvaluationStatus {
   SKIPPED // used when signatureValid = false
 }
 
+enum EvaluationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Organization
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,6 +197,9 @@ model Session {
   org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   apiKey  ApiKey       @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  /// Detailed multi-stage evaluation. Nullable for sessions evaluated under the
+  /// legacy single-LLM evaluator, or sessions with signatureValid=false.
+  scoreDetail SessionScore?
 
   @@index([userId])
   @@index([orgId])
@@ -198,6 +207,53 @@ model Session {
   @@index([evaluationStatus])
   @@index([createdAt])
   @@map("sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SessionScore
+// Output of the multi-stage evaluation pipeline. One row per scored session.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SessionScore {
+  id        String @id @default(cuid())
+  sessionId String @unique
+  /// Denormalized for fast historical-session lookups in the trend stage.
+  userId    String
+  /// Denormalized for org-scope queries.
+  orgId     String
+
+  promptQuality       Int   // 0-100, from Stage 3
+  iterationEfficiency Int   // 0-100, from Stage 3
+  toolUtilization     Int   // 0-100, from Stage 3
+  /// Anomaly-adjusted overall score (1 decimal place, floor 5).
+  overallScore        Float
+  confidence          EvaluationConfidence
+
+  summary          String  @db.Text
+  strength         String  @db.Text
+  improvementFocus String  @db.Text
+  trendObservation String? @db.Text
+  anomalyNotes     String? @db.Text
+
+  /// Anomaly[] from Stage 2 — array of { code, severity, detail }.
+  anomalies      Json @default("[]")
+  /// ClassificationResult from Stage 1 — { task_type, complexity, pattern, reasoning }.
+  classification Json
+  /// TrendData from Stage 4 — kept for debugging / future UI surfaces.
+  trends         Json?
+
+  /// True only when ALL three LLM stages failed and the pipeline ran on fallbacks.
+  evaluationFailed Boolean @default(false)
+  failureReason    String?
+  modelUsed        String
+
+  evaluatedAt DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, evaluatedAt])
+  @@index([orgId])
+  @@map("session_scores")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
