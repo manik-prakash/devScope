@@ -4,11 +4,16 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"testing"
 
 	"github.com/manik-prakash/devscope-cli/internal/api"
 )
+
+// canonicalContractJSON is a fixed canonical serialization that the backend's
+// canonicalJson (backend/src/utils/crypto.ts) must reproduce byte-for-byte for
+// the equivalent object. The matching assertion lives in
+// backend/src/__tests__/signature.test.ts. If either side changes, both fail.
+const canonicalContractJSON = `{"agent":"claude-code","cli_version":"0.1.0","duration_ms":300000,"stats":{"avg_prompt_length":15.5,"total_prompts":2},"user_id":"u<1>"}`
 
 func TestSignPayload_Consistency(t *testing.T) {
 	apiKey := "test_api_key_123"
@@ -47,11 +52,14 @@ func TestSignPayload_Consistency(t *testing.T) {
 		t.Fatalf("Signature was not properly calculated: %s", sig1)
 	}
 
-	// Verify exact manual deterministic computation
+	// Verify exact manual deterministic computation over the canonical form.
 	payload.Signature = "" // clear it to mimic the internal step
-	rawBytes, _ := json.Marshal(payload)
+	canonical, err := canonicalJSON(payload)
+	if err != nil {
+		t.Fatalf("canonicalJSON failed: %v", err)
+	}
 	h := hmac.New(sha256.New, []byte(apiKey))
-	h.Write(rawBytes)
+	h.Write(canonical)
 	expectedHash := hex.EncodeToString(h.Sum(nil))
 
 	if sig1 != expectedHash {
@@ -98,6 +106,30 @@ func TestSignPayload_Errors(t *testing.T) {
 	payload := &api.SessionPayload{SessionID: "test"}
 	err = SignPayload(payload, "")
 	if err == nil {
-		t.Errorf("Expected error for empty API key")
+		t.Errorf("Expected error for empty signing secret")
+	}
+}
+
+// TestCanonicalJSON_BackendContract locks the canonical serialization the
+// backend relies on: object keys sorted alphabetically (recursively) and no
+// HTML escaping of < > &.
+func TestCanonicalJSON_BackendContract(t *testing.T) {
+	obj := map[string]any{
+		"user_id":     "u<1>",
+		"agent":       "claude-code",
+		"cli_version": "0.1.0",
+		"duration_ms": 300000,
+		"stats": map[string]any{
+			"total_prompts":     2,
+			"avg_prompt_length": 15.5,
+		},
+	}
+
+	got, err := canonicalJSON(obj)
+	if err != nil {
+		t.Fatalf("canonicalJSON failed: %v", err)
+	}
+	if string(got) != canonicalContractJSON {
+		t.Errorf("canonical form mismatch:\n got: %s\nwant: %s", got, canonicalContractJSON)
 	}
 }

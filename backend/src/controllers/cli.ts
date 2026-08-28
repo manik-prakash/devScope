@@ -3,6 +3,7 @@ import { verifySignature } from '../utils/crypto.js';
 import { forbidden } from '../utils/errors.js';
 import { evaluatePipeline } from '../services/evaluator/index.js';
 import { SessionPayloadSchema } from '../validators/cli.js';
+import { normalizeStats } from '../utils/stats.js';
 
 export const getMe = async (req: Request, res: Response) => {
   const user = await req.prisma.user.findUnique({
@@ -44,8 +45,9 @@ export const createSession = async (req: Request, res: Response) => {
     throw forbidden('Organization ID mismatch');
   }
 
-  // Signature verification
-  const signatureValid = verifySignature(payload, req.apiKey!.signingSecret);
+  // Signature verification runs against the raw request body — the exact bytes
+  // the CLI signed — not the parsed `payload`, whose `stats` we normalize below.
+  const signatureValid = verifySignature(req.body, req.apiKey!.signingSecret);
 
   // Project membership check
   const membership = await req.prisma.projectMember.findUnique({
@@ -77,7 +79,7 @@ export const createSession = async (req: Request, res: Response) => {
       durationMs: BigInt(payload.duration_ms),
       cliVersion: payload.cli_version,
       messages: payload.messages || [],
-      stats: payload.stats,
+      stats: normalizeStats(payload.stats),
       signatureValid,
       evaluationStatus: signatureValid ? 'PENDING' : 'SKIPPED',
     },

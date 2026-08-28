@@ -2,9 +2,9 @@
 //
 // Endpoints covered:
 //
-//	GET  /api/v1/me               — fetch authenticated user context
-//	POST /api/v1/sessions         — submit a signed session payload
-//	GET  /api/v1/sessions/recent  — fetch recent scored sessions
+//	GET  /api/v1/cli/me               — fetch authenticated user context
+//	POST /api/v1/cli/sessions         — submit a signed session payload
+//	GET  /api/v1/cli/sessions/recent  — fetch recent scored sessions
 package api
 
 import (
@@ -27,7 +27,7 @@ type MeProject struct {
 	Name string `json:"name"`
 }
 
-// MeResponse is the typed response from GET /api/v1/me.
+// MeResponse is the typed response from GET /api/v1/cli/me.
 type MeResponse struct {
 	UserID             string      `json:"user_id"`
 	OrgID              string      `json:"org_id"`
@@ -35,6 +35,9 @@ type MeResponse struct {
 	Email              string      `json:"email"`
 	Projects           []MeProject `json:"projects"`
 	DefaultProjectSlug string      `json:"default_project_slug"`
+	// SigningSecret is the per-API-key HMAC secret the CLI uses to sign session
+	// payloads. It is distinct from the bearer API key and must never be logged.
+	SigningSecret string `json:"signing_secret"`
 }
 
 // RecentSession is a single session returned from GET /api/v1/sessions/recent.
@@ -142,7 +145,7 @@ func NewClient(baseURL, apiKey, cliVersion string) *Client {
 // GetMe fetches the authenticated user's context from the backend.
 // Returns a human-readable error on auth failure or network issues.
 func (c *Client) GetMe() (*MeResponse, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/api/v1/me", nil)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/api/v1/cli/me", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
@@ -197,7 +200,7 @@ func (c *Client) SubmitSession(payload *SessionPayload) *SubmitResult {
 		return &SubmitResult{Err: fmt.Errorf("failed to serialize session: %w", err)}
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/api/v1/sessions", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/api/v1/cli/sessions", bytes.NewReader(body))
 	if err != nil {
 		return &SubmitResult{Err: fmt.Errorf("failed to build request: %w", err)}
 	}
@@ -263,7 +266,7 @@ func (c *Client) SubmitSession(payload *SessionPayload) *SubmitResult {
 
 // GetRecentSessions fetches the last N scored sessions for the authenticated user.
 func (c *Client) GetRecentSessions(limit int) (*RecentSessionsResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/sessions/recent?limit=%d", c.baseURL, limit)
+	url := fmt.Sprintf("%s/api/v1/cli/sessions/recent?limit=%d", c.baseURL, limit)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {

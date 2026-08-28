@@ -17,6 +17,17 @@ import { prisma } from './config/prisma.js'
 import { logger } from './config/logger.js'
 import { env } from './config/env.js'
 
+// Last-resort safety net. With express-async-errors in place, handler rejections
+// are routed to the error middleware; anything that still reaches here is a bug
+// outside the request lifecycle. Log it rather than let Node exit silently.
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'unhandledRejection')
+})
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaughtException — exiting')
+  process.exit(1)
+})
+
 async function main() {
   // ── Verify database connectivity before accepting traffic ────────────
   try {

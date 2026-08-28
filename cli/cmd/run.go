@@ -166,7 +166,12 @@ Example:
 		}
 
 		// 9. Protect & Ship
-		if err := pipeline.SignPayload(payload, cfg.APIKey); err != nil {
+		if cfg.SigningSecret == "" {
+			return fmt.Errorf(
+				"missing signing secret in local config.\n" +
+					"Run \"devscope auth\" again to fetch it from the backend.")
+		}
+		if err := pipeline.SignPayload(payload, cfg.SigningSecret); err != nil {
 			return fmt.Errorf("failed to secure session payload: %w", err)
 		}
 

@@ -40,6 +40,9 @@ them structurally with immediate remote assignments.`,
 		cfg.OrgID = meResp.OrgID
 		cfg.Name = meResp.Name
 		cfg.Email = meResp.Email
+		if meResp.SigningSecret != "" {
+			cfg.SigningSecret = meResp.SigningSecret
+		}
 		
 		var projs []config.Project
 		for _, p := range meResp.Projects {

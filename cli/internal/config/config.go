@@ -106,6 +106,7 @@ type Project struct {
 // Config is the full global config persisted at ~/.devscope/config.yaml.
 type Config struct {
 	APIKey         string    `yaml:"api_key"         mapstructure:"api_key"`
+	SigningSecret  string    `yaml:"signing_secret"  mapstructure:"signing_secret"`
 	UserID         string    `yaml:"user_id"         mapstructure:"user_id"`
 	OrgID          string    `yaml:"org_id"          mapstructure:"org_id"`
 	Name           string    `yaml:"name"            mapstructure:"name"`
