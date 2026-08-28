@@ -6,17 +6,24 @@ export type Plan = 'FREE' | 'PRO' | 'ENTERPRISE'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
+export interface AuthUser {
+  name: string
+  email: string
+}
+
 export interface AuthTokens {
   accessToken: string
   refreshToken: string
   expiresIn: string
   mustChangePass?: boolean
+  user?: AuthUser
 }
 
 export interface RefreshResponse {
   accessToken: string
   expiresIn: string
   mustChangePass?: boolean
+  user?: AuthUser
 }
 
 export interface JwtPayload {

@@ -86,16 +86,16 @@ export const createSession = async (req: Request, res: Response) => {
     update: {}, // sessions are immutable once sent from CLI
   });
 
-  if (signatureValid) {
-    // Synchronous multi-stage pipeline. The orchestrator never throws —
-    // every internal failure is downgraded to a fallback — but we still
-    // guard against unexpected Prisma write errors so the CLI always sees
-    // a 202 once the session has been persisted.
-    try {
-      await evaluatePipeline(session.id);
-    } catch (err) {
-      console.error(`Evaluation pipeline crashed for ${session.id}:`, err);
-    }
+  // Kick off evaluation without blocking the CLI's request. The pipeline makes
+  // several LLM calls and can outlast the CLI's HTTP timeout; the CLI only needs
+  // to know the session was persisted. Only a fresh PENDING session is
+  // evaluated — a resubmit of the same session id (upsert `update: {}`) must not
+  // re-run the pipeline. `evaluatePipeline` never throws; the catch is only for
+  // a synchronous throw before its first await.
+  if (signatureValid && session.evaluationStatus === 'PENDING') {
+    void evaluatePipeline(session.id).catch((err) =>
+      console.error(`[cli] evaluation kickoff failed for ${session.id}:`, err),
+    );
   }
 
   res.status(202).json({ session_id: session.id });

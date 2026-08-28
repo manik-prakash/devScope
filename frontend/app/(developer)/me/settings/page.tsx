@@ -210,7 +210,7 @@ function PasswordSection() {
       })
       // The server revoked the old refresh tokens and issued a new pair;
       // persist them so subsequent requests don't 401 once the old access token expires.
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false)
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false, tokens.user)
       setSuccess('Password updated.')
       reset()
       setTimeout(() => setSuccess(null), 3000)

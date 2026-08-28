@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
+  orgSlug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and dashes')
+    .min(2)
+    .max(40),
   email: z.string().email(),
   password: z.string().min(8),
 });
