@@ -66,6 +66,8 @@ func TestTakeSnapshot_SkipsExcludedDirs(t *testing.T) {
 	createFile(t, root, filepath.Join("node_modules", "lodash", "index.js"), "module.exports = {}")
 	createFile(t, root, filepath.Join("vendor", "mod.go"), "package vendor")
 	createFile(t, root, filepath.Join("__pycache__", "app.cpython-311.pyc"), "binary")
+	createFile(t, root, filepath.Join("coverage", "lcov.info"), "TN:")
+	createFile(t, root, filepath.Join("htmlcov", "index.html"), "<html>")
 
 	snap, err := TakeSnapshot(root, SnapshotOptions{})
 	if err != nil {

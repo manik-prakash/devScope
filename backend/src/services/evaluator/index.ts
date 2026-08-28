@@ -4,7 +4,7 @@
  * Runs five stages in order:
  *
  *   Stage 1 — classify           (LLM, with retry + Zod + default fallback)
- *   Stage 2 — detectAnomalies    (pure, 9 deterministic rules)
+ *   Stage 2 — detectAnomalies    (pure, 8 deterministic rules)
  *   Stage 3 — scoreDimensions    (LLM, with retry + Zod + neutral fallback)
  *           — compute adjusted_score in code
  *   Stage 4 — analyzeTrends      (pure, over last 10 SessionScore rows)
@@ -200,11 +200,15 @@ async function runPipeline(sessionId: string): Promise<void> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function loadHistory(userId: string, currentSessionId: string): Promise<HistoricalSession[]> {
+export async function loadHistory(userId: string, currentSessionId: string): Promise<HistoricalSession[]> {
   const rows = await prisma.sessionScore.findMany({
     where: {
       userId,
       sessionId: { not: currentSessionId },
+      // Fallback-only evaluations (all three LLM stages failed) carry neutral
+      // placeholder scores — they'd distort the trend signal and the
+      // "HIGH confidence needs 10 prior sessions" gate.
+      evaluationFailed: false,
     },
     orderBy: { evaluatedAt: 'desc' },
     take:    10,

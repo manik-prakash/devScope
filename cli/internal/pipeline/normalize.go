@@ -30,19 +30,19 @@ func Normalize(sess *adapters.NormalizedSession) error {
 	}
 	sess.Messages = filtered
 
-	// 2. Sort messages chronologically
-	// We use a stable sort to preserve the original parsed order when timestamps are identical or zero.
+	// 2. Sort messages chronologically.
+	// Stable sort + only reorder a pair when BOTH timestamps are real. Go's zero
+	// time.Time is "before" every real time, so comparing a zero against a real
+	// one would yank every timestamp-less message to the front and scramble logs
+	// that only carry partial timestamps (common for Codex). Leaving those pairs
+	// "equal" keeps them in parsed order.
 	sort.SliceStable(sess.Messages, func(i, j int) bool {
 		ti := sess.Messages[i].Timestamp
 		tj := sess.Messages[j].Timestamp
 
-		// If both are zero, preserve original order
-		if ti.IsZero() && tj.IsZero() {
-			return false 
+		if ti.IsZero() || tj.IsZero() {
+			return false
 		}
-		// If only one is zero, push the zero-timestamp to the start (or end - here we place it early)
-		// But ideally if partial timestamps exist, the zero ones are just left where they were relative
-		// to stable sort. Standard Time.Before says zero time is before any real time.
 		return ti.Before(tj)
 	})
 

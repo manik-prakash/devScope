@@ -118,13 +118,22 @@ export const getRecentSessions = async (req: Request, res: Response) => {
     }
   });
 
+  // The CLI (`devscope status`) renders `status` verbatim and its typed model
+  // documents queued|scored|failed — map the DB enum to that vocabulary.
+  const statusMap: Record<string, string> = {
+    PENDING: 'queued',
+    SCORED: 'scored',
+    FAILED: 'failed',
+    SKIPPED: 'skipped',
+  };
+
   res.json({
     sessions: sessions.map(s => ({
       session_id: s.id,
       agent: s.agent,
       started_at: s.startedAt,
       score: s.score,
-      status: s.evaluationStatus,
+      status: statusMap[s.evaluationStatus] ?? s.evaluationStatus.toLowerCase(),
     }))
   });
 };

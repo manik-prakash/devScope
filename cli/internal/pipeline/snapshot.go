@@ -43,6 +43,9 @@ var defaultExcludeDirs = map[string]bool{
 	".cache":        true,
 	".parcel-cache": true,
 	".turbo":        true,
+	"coverage":      true,
+	"htmlcov":       true,
+	"Pods":          true,
 }
 
 // defaultMaxFileSize is the maximum file size (in bytes) to include in

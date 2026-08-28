@@ -44,6 +44,24 @@ export const getUsers = async (req: Request, res: Response) => {
   res.json({ users });
 };
 
+export const getUserById = async (req: Request, res: Response) => {
+  const user = await req.prisma.user.findFirst({
+    where: { id: req.params['userId'] as string, orgId: req.user!.orgId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      mustChangePass: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user) throw notFound('User');
+
+  res.json({ user });
+};
+
 export const getProjects = async (req: Request, res: Response) => {
   // Admins see every project in the org; managers only see ones they're a member of.
   const where: Prisma.ProjectWhereInput = req.user!.role === 'ADMIN'

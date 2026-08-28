@@ -4,7 +4,7 @@ import { mockReq, mockRes } from './helpers/http.js';
 
 vi.mock('../services/evaluator/index.js');
 import { evaluatePipeline } from '../services/evaluator/index.js';
-import { createSession } from '../controllers/cli.js';
+import { createSession, getRecentSessions } from '../controllers/cli.js';
 
 const evaluatePipelineMock = vi.mocked(evaluatePipeline);
 
@@ -86,5 +86,27 @@ describe('createSession — evaluation dispatch', () => {
 
     expect(evaluatePipelineMock).not.toHaveBeenCalled();
     expect(upsert.mock.calls[0][0].create.evaluationStatus).toBe('SKIPPED');
+  });
+});
+
+describe('getRecentSessions', () => {
+  it('maps evaluationStatus to the CLI vocabulary (queued/scored/failed)', async () => {
+    const rows = [
+      { id: 'a', agent: 'claude-code', startedAt: new Date(), score: null, evaluationStatus: 'PENDING' },
+      { id: 'b', agent: 'claude-code', startedAt: new Date(), score: 82, evaluationStatus: 'SCORED' },
+      { id: 'c', agent: 'codex', startedAt: new Date(), score: null, evaluationStatus: 'FAILED' },
+      { id: 'd', agent: 'codex', startedAt: new Date(), score: null, evaluationStatus: 'SKIPPED' },
+    ];
+    const req = mockReq({
+      query: {},
+      user: { userId: 'user-1' },
+      prisma: { session: { findMany: vi.fn().mockResolvedValue(rows) } },
+    });
+    const res = mockRes();
+
+    await getRecentSessions(req, res);
+
+    const statuses = (res.body as { sessions: { status: string }[] }).sessions.map((s) => s.status);
+    expect(statuses).toEqual(['queued', 'scored', 'failed', 'skipped']);
   });
 });

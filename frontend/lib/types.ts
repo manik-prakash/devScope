@@ -1,4 +1,5 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
+// Keep in sync with backend/prisma/schema.prisma (UserRole, EvaluationStatus, Plan).
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'DEVELOPER'
 export type EvaluationStatus = 'PENDING' | 'SCORED' | 'FAILED' | 'SKIPPED'

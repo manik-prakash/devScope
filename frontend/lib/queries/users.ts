@@ -44,16 +44,14 @@ export function useOrgUsers(viewerRole: UserRole | undefined) {
   return isAdmin ? admin : manager
 }
 
-// ─── Manager — single user — STUB (GET /manager/users/:id not yet in backend) ─
+// ─── Manager — single user ───────────────────────────────────────────────────
 
 export function useManagerUser(userId: string | null) {
-  const { data: users } = useManagerUsers()
   return useQuery({
     queryKey: ['manager', 'user', userId],
-    // TODO: replace with GET /manager/users/:userId when backend adds it
-    queryFn: async (): Promise<User | null> => {
-      await new Promise((r) => setTimeout(r, 0))
-      return users?.find((u) => u.id === userId) ?? null
+    queryFn: async (): Promise<User> => {
+      const { data } = await api.get<{ user: User }>(`/manager/users/${userId}`)
+      return data.user
     },
     enabled: !!userId,
     staleTime: 60_000,

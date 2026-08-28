@@ -12,6 +12,8 @@ datasource db {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enums
+// Keep the string values in sync with frontend/lib/types.ts
+// (UserRole, Plan, EvaluationStatus).
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum UserRole {

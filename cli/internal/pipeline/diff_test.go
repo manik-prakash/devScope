@@ -149,29 +149,27 @@ func TestComputeDiff_NoChanges(t *testing.T) {
 }
 
 func TestComputeDiff_NilSnapshots(t *testing.T) {
-	// Both nil.
-	diff := ComputeDiff(nil, nil)
-	if diff.TotalChanged() != 0 {
-		t.Errorf("TotalChanged = %d, want 0 for nil snapshots", diff.TotalChanged())
-	}
-
-	// Before nil, after has files.
 	now := time.Now()
-	after := &Snapshot{Files: map[string]FileEntry{
+	withFiles := &Snapshot{Files: map[string]FileEntry{
 		"main.go": {Path: "main.go", Size: 100, ModTime: now},
 	}}
-	diff = ComputeDiff(nil, after)
-	if len(diff.Added) != 1 {
-		t.Errorf("Added count = %d, want 1 when before is nil", len(diff.Added))
-	}
 
-	// Before has files, after nil.
-	before := &Snapshot{Files: map[string]FileEntry{
-		"old.go": {Path: "old.go", Size: 100, ModTime: now},
-	}}
-	diff = ComputeDiff(before, nil)
-	if len(diff.Deleted) != 1 {
-		t.Errorf("Deleted count = %d, want 1 when after is nil", len(diff.Deleted))
+	// A diff needs BOTH snapshots. If either is missing (e.g. the pre-run
+	// snapshot failed), the result is "unknown" — an empty diff — not "every
+	// file changed". Otherwise a failed pre-snapshot would report the whole
+	// repo as added.
+	cases := []struct {
+		name           string
+		before, after  *Snapshot
+	}{
+		{"both nil", nil, nil},
+		{"before nil", nil, withFiles},
+		{"after nil", withFiles, nil},
+	}
+	for _, tc := range cases {
+		if got := ComputeDiff(tc.before, tc.after).TotalChanged(); got != 0 {
+			t.Errorf("%s: TotalChanged = %d, want 0", tc.name, got)
+		}
 	}
 }
 

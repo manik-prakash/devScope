@@ -1,8 +1,6 @@
 package pipeline
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"regexp"
 
@@ -29,68 +27,78 @@ func init() {
 	}
 }
 
-// RedactSession serializes the session to JSON, applies built-in and custom regex
-// redaction patterns across the raw string, and deserializes back into a new NormalizedSession.
-// It returns the new session and the total number of replacements made.
+const redactionPlaceholder = "[REDACTED]"
+
+// RedactSession returns a copy of the session with secrets scrubbed from every
+// free-text field (message content and tool-call input/output) and the total
+// number of replacements made.
+//
+// Redaction is applied field-by-field, never to a serialized blob: a pattern
+// like the multi-line PRIVATE KEY matcher can only ever act inside one string,
+// so it can no longer span JSON structure and corrupt the document. Structural
+// fields (IDs, roles, extensions, timestamps) are copied untouched, and
+// ContentLength is preserved so downstream stats stay accurate.
 func RedactSession(sess *adapters.NormalizedSession, customPatterns []string) (*adapters.NormalizedSession, int, error) {
 	if sess == nil {
 		return nil, 0, fmt.Errorf("cannot redact nil session")
 	}
 
-	// 1. Serialize entire normalized session to JSON text
-	rawBytes, err := json.Marshal(sess)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to marshal session for redaction: %w", err)
-	}
-
-	// 2. Compile custom patterns provided by config
-	var compiledCustoms []*regexp.Regexp
-	for _, pattern := range customPatterns {
-		if pattern == "" {
+	patterns := make([]*regexp.Regexp, 0, len(compiledBuiltIns)+len(customPatterns))
+	patterns = append(patterns, compiledBuiltIns...)
+	for _, p := range customPatterns {
+		if p == "" {
 			continue
 		}
-		rx, err := regexp.Compile(pattern)
+		rx, err := regexp.Compile(p)
 		if err != nil {
-			// Skip invalid custom regexes rather than block the whole CLI,
-			// but in an ideal world we'd log a warning.
+			// Skip invalid custom regexes rather than fail the whole run.
 			continue
 		}
-		compiledCustoms = append(compiledCustoms, rx)
+		patterns = append(patterns, rx)
 	}
 
-	totalRedactions := 0
-	redactionStr := []byte("[REDACTED]")
+	out := *sess
+	out.Messages = make([]adapters.NormalizedMessage, len(sess.Messages))
+	total := 0
 
-	// 3. Apply Built-in patterns
-	for _, rx := range compiledBuiltIns {
-		// ReplaceAll doesn't report count directly, so we use ReplaceAllFunc
-		// or count first, but ReplaceAllFunc is safe and precise.
-		matches := rx.FindAll(rawBytes, -1)
-		totalRedactions += len(matches)
-		if len(matches) > 0 {
-			rawBytes = rx.ReplaceAll(rawBytes, redactionStr)
+	for i, msg := range sess.Messages {
+		nm := msg
+		var n int
+		nm.Content, n = redactField(patterns, msg.Content)
+		total += n
+
+		if len(msg.ToolCalls) > 0 {
+			nm.ToolCalls = make([]adapters.NormalizedToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				ntc := tc
+				ntc.Input, n = redactField(patterns, tc.Input)
+				total += n
+				ntc.Output, n = redactField(patterns, tc.Output)
+				total += n
+				nm.ToolCalls[j] = ntc
+			}
 		}
+
+		out.Messages[i] = nm
 	}
 
-	// 4. Apply Custom patterns
-	for _, rx := range compiledCustoms {
-		matches := rx.FindAll(rawBytes, -1)
-		totalRedactions += len(matches)
-		if len(matches) > 0 {
-			rawBytes = rx.ReplaceAll(rawBytes, redactionStr)
+	return &out, total, nil
+}
+
+// redactField applies every pattern to s, replacing matches with the placeholder,
+// and returns the new string plus the number of replacements.
+func redactField(patterns []*regexp.Regexp, s string) (string, int) {
+	if s == "" {
+		return s, 0
+	}
+	count := 0
+	for _, rx := range patterns {
+		matches := rx.FindAllString(s, -1)
+		if len(matches) == 0 {
+			continue
 		}
+		count += len(matches)
+		s = rx.ReplaceAllString(s, redactionPlaceholder)
 	}
-
-	// 5. Deserialize back into a sanitized struct.
-	// Since we blind-replaced bytes in JSON strings, we need to ensure the JSON
-	// didn't break. Since [REDACTED] has no quotes or curly braces, it is universally
-	// safe to drop into any JSON string value.
-	var sanitized adapters.NormalizedSession
-	// Using a decoder directly to catch structural errors safely.
-	decoder := json.NewDecoder(bytes.NewReader(rawBytes))
-	if err := decoder.Decode(&sanitized); err != nil {
-		return nil, 0, fmt.Errorf("failed to parse sanitized session back into struct: %w", err)
-	}
-
-	return &sanitized, totalRedactions, nil
+	return s, count
 }

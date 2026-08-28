@@ -46,7 +46,7 @@ type RecentSession struct {
 	Agent     string  `json:"agent"`
 	StartedAt string  `json:"started_at"`
 	Score     float64 `json:"score"`
-	Status    string  `json:"status"` // "queued" | "scored" | "failed"
+	Status    string  `json:"status"` // "queued" | "scored" | "failed" | "skipped"
 }
 
 // RecentSessionsResponse is the typed response from GET /api/v1/sessions/recent.
