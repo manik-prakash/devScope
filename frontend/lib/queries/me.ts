@@ -4,7 +4,6 @@ import {
   average,
   mode,
   isWithinDays,
-  lastNDayLabels,
   clamp,
   formatDurationLong,
 } from '@/lib/utils'
@@ -13,7 +12,13 @@ import type { RadarDataPoint, ScoreTrendPoint } from '@/components/charts'
 
 // ─── Sub-score computation (mirrors the drawer logic) ─────────────────────────
 
-function subScores(stats: SessionStats | undefined) {
+// Local calendar day as YYYY-MM-DD — used to bucket sessions by day without the
+// month/day-only label colliding across years.
+export function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function subScores(stats: SessionStats | undefined) {
   if (!stats) return { promptQuality: 0, iterationEfficiency: 0, toolUtilization: 0 }
   const avg   = stats.avgPromptLength ?? 0
   const iters = stats.totalIterations ?? 0
@@ -105,29 +110,36 @@ function buildInsights(thisWeek: Session[], lastWeek: Session[]): Insight[] {
 
 // ─── Score trend data (14 days) ───────────────────────────────────────────────
 
-function buildTrendData(sessions: Session[]): ScoreTrendPoint[] {
-  const labels = lastNDayLabels(14)
-  const byLabel: Record<string, number[]> = {}
-  for (const l of labels) byLabel[l] = []
+export function buildTrendData(sessions: Session[]): ScoreTrendPoint[] {
+  // Bucket by ISO day (year-aware) but keep a short display label for the axis.
+  const days: { iso: string; label: string }[] = []
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    days.push({
+      iso:   isoDay(d),
+      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    })
+  }
+
+  const byIso: Record<string, number[]> = {}
+  for (const { iso } of days) byIso[iso] = []
 
   for (const s of sessions) {
     if (s.score === null || s.score === undefined) continue
-    const label = new Date(s.startedAt).toLocaleDateString('en-US', {
-      month: 'short',
-      day:   'numeric',
-    })
-    if (label in byLabel) byLabel[label].push(s.score)
+    const iso = isoDay(new Date(s.startedAt))
+    if (iso in byIso) byIso[iso].push(s.score)
   }
 
-  return labels.map((date) => {
-    const scores = byLabel[date]
-    return { date, score: scores.length ? average(scores) : null }
+  return days.map(({ iso, label }) => {
+    const scores = byIso[iso]
+    return { date: label, score: scores.length ? average(scores) : null }
   })
 }
 
 // ─── Radar data ───────────────────────────────────────────────────────────────
 
-function buildRadarData(thisWeek: Session[], lastWeek: Session[]): RadarDataPoint[] {
+export function buildRadarData(thisWeek: Session[], lastWeek: Session[]): RadarDataPoint[] {
   function avgSubScores(sessions: Session[]) {
     if (!sessions.length) return { promptQuality: 0, iterationEfficiency: 0, toolUtilization: 0 }
     const pq:  number[] = []

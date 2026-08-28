@@ -47,15 +47,20 @@ async function issueTokens(user: Pick<User, 'id' | 'orgId' | 'role'>, prisma: Pr
 }
 
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = loginSchema.parse(req.body);
+  const { orgSlug, email, password } = loginSchema.parse(req.body);
 
-  const user = await req.prisma.user.findFirst({
-    where: { email },
-    include: { org: true },
+  // Email is only unique per organisation, so login must be scoped to one org.
+  const org = await req.prisma.organization.findUnique({ where: { slug: orgSlug } });
+  if (!org) {
+    throw unauthorized('Invalid organization, email, or password');
+  }
+
+  const user = await req.prisma.user.findUnique({
+    where: { orgId_email: { orgId: org.id, email } },
   });
 
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    throw unauthorized('Invalid email or password');
+    throw unauthorized('Invalid organization, email, or password');
   }
 
   const tokens = await issueTokens(user, req.prisma);
@@ -63,6 +68,7 @@ export const login = async (req: Request, res: Response) => {
   res.json({
     ...tokens,
     mustChangePass: user.mustChangePass,
+    user: { name: user.name, email: user.email },
   });
 };
 
@@ -93,6 +99,7 @@ export const refresh = async (req: Request, res: Response) => {
     accessToken,
     expiresIn: env.JWT_EXPIRES_IN,
     mustChangePass: storedToken.user.mustChangePass,
+    user: { name: storedToken.user.name, email: storedToken.user.email },
   });
 };
 
@@ -144,6 +151,7 @@ export const register = async (req: Request, res: Response) => {
   res.status(201).json({
     ...tokens,
     mustChangePass: false,
+    user: { name: user.name, email: user.email },
   });
 };
 
@@ -176,5 +184,6 @@ export const changePassword = async (req: Request, res: Response) => {
   res.json({
     ...tokens,
     mustChangePass: false,
+    user: { name: user.name, email: user.email },
   });
 };

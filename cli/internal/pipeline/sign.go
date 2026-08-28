@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,39 +11,64 @@ import (
 	"github.com/manik-prakash/devscope-cli/internal/api"
 )
 
-// SignPayload computes a deterministic HMAC-SHA256 signature for the session payload
-// utilizing the provided API key. The payload is mutated to include the calculated
-// signature hash in the .Signature field.
-func SignPayload(payload *api.SessionPayload, apiKey string) error {
+// SignPayload computes a deterministic HMAC-SHA256 signature for the session
+// payload using the API key's signing secret (NOT the bearer API key). The
+// payload is mutated to carry the signature hex in its .Signature field.
+//
+// The bytes that are hashed are a canonical form of the payload:
+//   - the .Signature field is blanked so it can't salt its own hash
+//   - object keys are sorted alphabetically, recursively
+//   - HTML characters (< > &) are left un-escaped
+//
+// This canonical form is what the backend reproduces in
+// backend/src/utils/crypto.ts (canonicalJson) when it verifies the signature.
+func SignPayload(payload *api.SessionPayload, signingSecret string) error {
 	if payload == nil {
 		return fmt.Errorf("cannot sign nil payload")
 	}
-	if apiKey == "" {
-		return fmt.Errorf("cannot sign with empty api key")
+	if signingSecret == "" {
+		return fmt.Errorf("cannot sign with empty signing secret")
 	}
 
-	// 1. Temporarily clear the signature field so it doesn't salt its own hash calculation.
 	originalSig := payload.Signature
 	payload.Signature = ""
 
-	// 2. Marshal deterministic JSON.
-	// Go's encodings/json package guarantees that struct fields are serialized in the order
-	// they are declared, and map keys are sorted alphabetically.
-	rawBytes, err := json.Marshal(payload)
+	canonical, err := canonicalJSON(payload)
 	if err != nil {
-		// Restore the signature in case of failure.
 		payload.Signature = originalSig
-		return fmt.Errorf("failed to marshal payload for signing: %w", err)
+		return fmt.Errorf("failed to canonicalize payload for signing: %w", err)
 	}
 
-	// 3. Cryptographic Hashing HMAC-SHA256
-	h := hmac.New(sha256.New, []byte(apiKey))
-	h.Write(rawBytes)
-	hashBytes := h.Sum(nil)
-
-	// 4. Construct Hex encoding and mutate structural payload safely.
-	encodedHash := hex.EncodeToString(hashBytes)
-	payload.Signature = encodedHash
+	h := hmac.New(sha256.New, []byte(signingSecret))
+	h.Write(canonical)
+	payload.Signature = hex.EncodeToString(h.Sum(nil))
 
 	return nil
+}
+
+// canonicalJSON serializes v to a deterministic JSON form: object keys sorted
+// alphabetically (recursively) and no HTML escaping. It matches the output of
+// the backend's canonicalJson helper for the payload shapes we send.
+func canonicalJSON(v any) ([]byte, error) {
+	// Round-trip through a generic value so every struct becomes a map; Go's
+	// encoding/json marshals map keys in sorted order.
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var generic any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(generic); err != nil {
+		return nil, err
+	}
+
+	// Encoder.Encode appends a trailing newline — drop it.
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }

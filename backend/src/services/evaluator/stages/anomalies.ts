@@ -1,7 +1,7 @@
 /**
  * Stage 2 — Anomaly detection (pure compute, no LLM).
  *
- * Applies nine deterministic rules to flag suspicious or unusual session
+ * Applies eight deterministic rules to flag suspicious or unusual session
  * patterns. The orchestrator translates the returned anomaly list into a
  * score deduction in Stage 5 (flag × 8, warning × 3, info × 0).
  *

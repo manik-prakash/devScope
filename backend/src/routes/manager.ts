@@ -11,6 +11,7 @@ router.use(requireRole('ADMIN', 'MANAGER'));
 
 router.get('/org', managerController.getOrg);
 router.get('/users', managerController.getUsers);
+router.get('/users/:userId', managerController.getUserById);
 router.get('/projects', managerController.getProjects);
 router.get('/projects/:slug', managerController.getProjectBySlug);
 router.post('/projects', managerController.createProject);

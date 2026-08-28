@@ -6,6 +6,12 @@
  * This separation keeps the app testable via supertest without binding ports.
  */
 
+// Patches the Express 4 router so a rejected promise from an async handler or
+// middleware is forwarded to the error handler below instead of becoming an
+// unhandled rejection (which would crash the process). MUST be imported before
+// any route/handler is defined.
+import 'express-async-errors'
+
 import express, {
   type Application,
   type Request,

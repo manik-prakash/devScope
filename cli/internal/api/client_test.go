@@ -18,8 +18,8 @@ func TestGetMe_Success(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/me" {
-			t.Errorf("expected /api/v1/me, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/cli/me" {
+			t.Errorf("expected /api/v1/cli/me, got %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Errorf("Authorization header: got %q", got)
@@ -110,8 +110,8 @@ func TestSubmitSession_Accepted(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/sessions" {
-			t.Errorf("expected /api/v1/sessions, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/cli/sessions" {
+			t.Errorf("expected /api/v1/cli/sessions, got %s", r.URL.Path)
 		}
 		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
 			t.Errorf("Content-Type: got %q", ct)
@@ -254,8 +254,8 @@ func TestSubmitSession_Unreachable(t *testing.T) {
 
 func TestGetRecentSessions_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/sessions/recent" {
-			t.Errorf("expected /api/v1/sessions/recent, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/cli/sessions/recent" {
+			t.Errorf("expected /api/v1/cli/sessions/recent, got %s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("limit"); got != "5" {
 			t.Errorf("limit param: got %q", got)

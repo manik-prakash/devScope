@@ -82,19 +82,15 @@ func (d *DiffResult) Extensions() []string {
 func ComputeDiff(before, after *Snapshot) *DiffResult {
 	result := &DiffResult{}
 
-	if before == nil && after == nil {
+	// A diff is only meaningful with both endpoints. If either snapshot is
+	// missing (a failed pre- or post-run walk), report nothing changed rather
+	// than treating every file as added/deleted.
+	if before == nil || after == nil {
 		return result
 	}
 
-	beforeFiles := make(map[string]FileEntry)
-	afterFiles := make(map[string]FileEntry)
-
-	if before != nil {
-		beforeFiles = before.Files
-	}
-	if after != nil {
-		afterFiles = after.Files
-	}
+	beforeFiles := before.Files
+	afterFiles := after.Files
 
 	// Find added and modified files.
 	for path, afterEntry := range afterFiles {

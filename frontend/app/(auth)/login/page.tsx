@@ -16,6 +16,7 @@ import type { AuthTokens } from '@/lib/types'
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
 const schema = z.object({
+  orgSlug:  z.string().min(1, 'Organization is required'),
   email:    z.string().min(1, 'Email is required').email('Enter a valid email'),
   password: z.string().min(1, 'Password is required'),
 })
@@ -39,11 +40,12 @@ function LoginForm() {
     setServerError(null)
     try {
       const { data: tokens } = await api.post<AuthTokens>('/auth/login', {
+        orgSlug:  data.orgSlug,
         email:    data.email,
         password: data.password,
       })
 
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken, tokens.mustChangePass ?? false)
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, tokens.mustChangePass ?? false, tokens.user)
 
       // First-login users must set a new password before doing anything else
       if (tokens.mustChangePass) {
@@ -72,6 +74,16 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <Field
+        id="orgSlug"
+        label="Organization"
+        type="text"
+        autoComplete="organization"
+        placeholder="acme"
+        error={errors.orgSlug?.message}
+        {...register('orgSlug')}
+      />
+
       <Field
         id="email"
         label="Email"

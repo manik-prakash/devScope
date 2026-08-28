@@ -25,7 +25,7 @@ const envSchema = z.object({
   PORT: z
     .string()
     .regex(/^\d+$/, 'PORT must be a numeric string')
-    .default('3000')
+    .default('3001')
     .transform(Number),
 
   // ── Database ──────────────────────────────────────────────────────────────
@@ -52,12 +52,12 @@ const envSchema = z.object({
     .url('OPENROUTER_BASE_URL must be a valid URL')
     .default('https://openrouter.ai/api/v1'),
 
-  OPENROUTER_MODEL: z
-    .string()
-    .default('openai/gpt-4o-mini'),
+  // Note: the evaluator model is intentionally hardcoded in
+  // src/services/evaluator/prompts.ts (MODEL) so the pipeline can't be pointed
+  // at a paid model — there is deliberately no OPENROUTER_MODEL env var.
 
   // ── CORS ─────────────────────────────────────────────────────────────────
-  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
 })
 
 // ---------------------------------------------------------------------------

@@ -32,6 +32,10 @@ Example:
 			return err
 		}
 
+		if config.IsCacheStale(cfg) {
+			fmt.Fprintln(os.Stderr, "devscope: cached project/user info may be stale — run \"devscope sync\".")
+		}
+
 		apiURL, err := config.APIBaseURL()
 		if err != nil {
 			return err
@@ -72,7 +76,12 @@ Example:
 		execCmd.Stdout = os.Stdout
 		execCmd.Stderr = os.Stderr
 
-		_ = execCmd.Run() // Wait for agent to exit. We don't bubble its specific execution errors here, just tracking is done.
+		// Wait for the agent to exit. We don't bubble its exit code (telemetry
+		// still ships), but a non-nil error means it crashed or was killed — say
+		// so, otherwise a session with no messages looks like "nothing recorded".
+		if runErr := execCmd.Run(); runErr != nil {
+			fmt.Fprintf(os.Stderr, "devscope: agent exited with error: %v\n", runErr)
+		}
 
 		endedAt := time.Now().UTC()
 		durationMs := int(endedAt.Sub(startedAt).Milliseconds())
@@ -120,9 +129,14 @@ Example:
 			customPatterns = repoCfg.CustomStripPatterns
 		}
 
-		sanitized, _, err := pipeline.RedactSession(sess, customPatterns)
+		sanitized, redactionCount, err := pipeline.RedactSession(sess, customPatterns)
 		if err != nil {
 			return fmt.Errorf("failed to sanitize session: %w", err)
+		}
+		if redactionCount > 0 {
+			if logErr := pipeline.AppendRedactionLog(config.RedactionLogPath(), sanitized.SessionID, redactionCount); logErr != nil {
+				fmt.Fprintf(os.Stderr, "devscope: could not write redaction log: %v\n", logErr)
+			}
 		}
 
 		stats := pipeline.ExtractStats(sanitized, diff)
@@ -166,7 +180,12 @@ Example:
 		}
 
 		// 9. Protect & Ship
-		if err := pipeline.SignPayload(payload, cfg.APIKey); err != nil {
+		if cfg.SigningSecret == "" {
+			return fmt.Errorf(
+				"missing signing secret in local config.\n" +
+					"Run \"devscope auth\" again to fetch it from the backend.")
+		}
+		if err := pipeline.SignPayload(payload, cfg.SigningSecret); err != nil {
 			return fmt.Errorf("failed to secure session payload: %w", err)
 		}
 

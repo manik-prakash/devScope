@@ -295,3 +295,27 @@ func TestAPIBaseURL(t *testing.T) {
 		t.Errorf("got %q, want %q", url, "https://api.devscope.io")
 	}
 }
+
+// TestAPIBaseURL_Normalizes checks that a trailing slash or an accidentally
+// included "/api/v1" is stripped, since the API client appends "/api/v1/..."
+// to whatever this returns.
+func TestAPIBaseURL_Normalizes(t *testing.T) {
+	defer os.Unsetenv("DEVSCOPE_API_BASE_URL")
+	cases := map[string]string{
+		"https://api.devscope.io/":        "https://api.devscope.io",
+		"https://api.devscope.io/api/v1":  "https://api.devscope.io",
+		"https://api.devscope.io/api/v1/": "https://api.devscope.io",
+		"http://localhost:3001/api/v1":    "http://localhost:3001",
+		"http://localhost:3001":           "http://localhost:3001",
+	}
+	for in, want := range cases {
+		os.Setenv("DEVSCOPE_API_BASE_URL", in)
+		got, err := APIBaseURL()
+		if err != nil {
+			t.Fatalf("%q: unexpected error: %v", in, err)
+		}
+		if got != want {
+			t.Errorf("APIBaseURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

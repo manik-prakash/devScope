@@ -48,6 +48,36 @@ func TestNormalize_RemovesEmptyMessages(t *testing.T) {
 	}
 }
 
+func TestNormalize_KeepsParsedOrderWithPartialTimestamps(t *testing.T) {
+	// Only one message carries a timestamp. The rest must stay in parsed order —
+	// a zero timestamp must not sort ahead of a real one.
+	realTS := time.Date(2026, 1, 1, 10, 0, 5, 0, time.UTC)
+	sess := &adapters.NormalizedSession{
+		SessionID: "sess-1",
+		Messages: []adapters.NormalizedMessage{
+			{ContentLength: 1, Role: "user", Content: "a"},
+			{ContentLength: 1, Role: "assistant", Content: "b"},
+			{ContentLength: 1, Role: "user", Content: "c", Timestamp: realTS},
+			{ContentLength: 1, Role: "assistant", Content: "d"},
+		},
+	}
+
+	if err := Normalize(sess); err != nil {
+		t.Fatalf("Normalize failed: %v", err)
+	}
+
+	got := []string{}
+	for _, m := range sess.Messages {
+		got = append(got, m.Content)
+	}
+	want := []string{"a", "b", "c", "d"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("message order changed: got %v, want %v", got, want)
+		}
+	}
+}
+
 func TestNormalize_SortsMessagesStable(t *testing.T) {
 	t1 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	t2 := time.Date(2026, 1, 1, 11, 0, 0, 0, time.UTC)

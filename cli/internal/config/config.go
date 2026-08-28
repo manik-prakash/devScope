@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -58,11 +59,6 @@ func RedactionLogPath() string {
 	return filepath.Join(LogsDir(), "redaction.log")
 }
 
-// ShipLogPath returns the path to ~/.devscope/logs/ship.log.
-func ShipLogPath() string {
-	return filepath.Join(LogsDir(), "ship.log")
-}
-
 // EnsureDirs creates ~/.devscope/, queue/, and logs/ directories if they
 // do not already exist.
 func EnsureDirs() error {
@@ -81,7 +77,7 @@ func EnsureDirs() error {
 // APIBaseURL returns the DevScope backend URL from the environment.
 // Returns an error with actionable guidance if not set.
 func APIBaseURL() (string, error) {
-	url := os.Getenv("DEVSCOPE_API_BASE_URL")
+	url := strings.TrimSpace(os.Getenv("DEVSCOPE_API_BASE_URL"))
 	if url == "" {
 		return "", fmt.Errorf(
 			"DEVSCOPE_API_BASE_URL is not set.\n" +
@@ -89,6 +85,11 @@ func APIBaseURL() (string, error) {
 				"Example: export DEVSCOPE_API_BASE_URL=https://api.devscope.io",
 		)
 	}
+	// The API client appends "/api/v1/...", so normalise away a trailing slash
+	// or an accidentally included "/api/v1" segment to avoid a doubled path.
+	url = strings.TrimRight(url, "/")
+	url = strings.TrimSuffix(url, "/api/v1")
+	url = strings.TrimRight(url, "/")
 	return url, nil
 }
 
@@ -106,6 +107,7 @@ type Project struct {
 // Config is the full global config persisted at ~/.devscope/config.yaml.
 type Config struct {
 	APIKey         string    `yaml:"api_key"         mapstructure:"api_key"`
+	SigningSecret  string    `yaml:"signing_secret"  mapstructure:"signing_secret"`
 	UserID         string    `yaml:"user_id"         mapstructure:"user_id"`
 	OrgID          string    `yaml:"org_id"          mapstructure:"org_id"`
 	Name           string    `yaml:"name"            mapstructure:"name"`

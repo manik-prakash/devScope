@@ -12,7 +12,7 @@ import (
 )
 
 // TestAuthFlow_EndToEnd simulates the complete auth flow:
-//  1. Start a mock backend that responds to GET /api/v1/me
+//  1. Start a mock backend that responds to GET /api/v1/cli/me
 //  2. Pipe a fake API key into stdin
 //  3. Run the auth command
 //  4. Verify config was written correctly
@@ -24,7 +24,7 @@ func TestAuthFlow_EndToEnd(t *testing.T) {
 
 	// --- Mock backend ---
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/me" {
+		if r.URL.Path != "/api/v1/cli/me" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -44,6 +44,7 @@ func TestAuthFlow_EndToEnd(t *testing.T) {
 			Name:               "Test Dev",
 			Email:              "test@devscope.io",
 			DefaultProjectSlug: "my-api",
+			SigningSecret:      "signing-secret-abc",
 			Projects: []api.MeProject{
 				{ID: "p1", Slug: "my-api", Name: "My API"},
 				{ID: "p2", Slug: "my-frontend", Name: "My Frontend"},
@@ -83,6 +84,9 @@ func TestAuthFlow_EndToEnd(t *testing.T) {
 
 	if cfg.APIKey != "test-api-key-123" {
 		t.Errorf("APIKey: got %q", cfg.APIKey)
+	}
+	if cfg.SigningSecret != "signing-secret-abc" {
+		t.Errorf("SigningSecret: got %q", cfg.SigningSecret)
 	}
 	if cfg.UserID != "user-42" {
 		t.Errorf("UserID: got %q", cfg.UserID)

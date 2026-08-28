@@ -127,6 +127,77 @@ func TestRedactSession_MalformedJSONSafety(t *testing.T) {
 	}
 }
 
+// An orphan "-----BEGIN ... PRIVATE KEY-----" in one message and a stray
+// "-----END ... PRIVATE KEY-----" in another must not let the multi-line PEM
+// pattern chew through the structure between them and drop the session.
+func TestRedactSession_OrphanPEMMarkersDoNotDropSession(t *testing.T) {
+	sess := &adapters.NormalizedSession{
+		SessionID: "pem-orphans",
+		Messages: []adapters.NormalizedMessage{
+			{Role: "user", Content: "pasted a header by mistake: -----BEGIN RSA PRIVATE KEY-----", ContentLength: 60},
+			{Role: "assistant", Content: "the deploy script logged -----END RSA PRIVATE KEY----- to stderr", ContentLength: 60},
+			{Role: "user", Content: "keep this message intact", ContentLength: 24},
+		},
+	}
+
+	sanitized, _, err := RedactSession(sess, nil)
+	if err != nil {
+		t.Fatalf("RedactSession errored on orphan PEM markers: %v", err)
+	}
+	if len(sanitized.Messages) != 3 {
+		t.Fatalf("session lost messages: got %d, want 3", len(sanitized.Messages))
+	}
+	if sanitized.Messages[2].Content != "keep this message intact" {
+		t.Fatalf("unrelated message corrupted: %q", sanitized.Messages[2].Content)
+	}
+}
+
+// A complete PEM block contained in a single field is still redacted.
+func TestRedactSession_FullPEMBlockInOneField(t *testing.T) {
+	pem := "-----BEGIN RSA PRIVATE KEY-----\nMIIabc123\nMIIdef456\n-----END RSA PRIVATE KEY-----"
+	sess := &adapters.NormalizedSession{
+		SessionID: "pem-full",
+		Messages: []adapters.NormalizedMessage{
+			{
+				Role: "assistant",
+				ToolCalls: []adapters.NormalizedToolCall{
+					{ID: "t1", Name: "Bash", Input: "echo '" + pem + "' > key.pem"},
+				},
+			},
+		},
+	}
+
+	sanitized, counts, err := RedactSession(sess, nil)
+	if err != nil {
+		t.Fatalf("RedactSession failed: %v", err)
+	}
+	if counts != 1 {
+		t.Fatalf("expected 1 redaction, got %d", counts)
+	}
+	got := sanitized.Messages[0].ToolCalls[0].Input
+	if contains(got, "BEGIN RSA PRIVATE KEY") || !contains(got, "[REDACTED]") {
+		t.Fatalf("PEM block not redacted: %q", got)
+	}
+}
+
+// ContentLength is captured pre-redaction and must survive untouched so stats
+// stay accurate.
+func TestRedactSession_PreservesContentLength(t *testing.T) {
+	sess := &adapters.NormalizedSession{
+		SessionID: "len-1",
+		Messages: []adapters.NormalizedMessage{
+			{Role: "user", Content: "token ghp_1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R here", ContentLength: 999},
+		},
+	}
+	sanitized, _, err := RedactSession(sess, nil)
+	if err != nil {
+		t.Fatalf("RedactSession failed: %v", err)
+	}
+	if sanitized.Messages[0].ContentLength != 999 {
+		t.Fatalf("ContentLength changed: got %d, want 999", sanitized.Messages[0].ContentLength)
+	}
+}
+
 // Helper utility
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)

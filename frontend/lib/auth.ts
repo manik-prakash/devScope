@@ -109,6 +109,7 @@ export function persistAuthTokens(
   accessToken: string,
   refreshToken: string,
   mustChangePass: boolean = false,
+  user?: { name: string; email: string },
 ): void {
   setAccessToken(accessToken)
   setRefreshToken(refreshToken)
@@ -116,4 +117,10 @@ export function persistAuthTokens(
   if (payload?.role) setRoleCookie(payload.role)
   if (mustChangePass) setMustChangeCookie()
   else clearMustChangeCookie()
+  // The JWT carries only sub/orgId/role — persist the display identity separately
+  // so the sidebar/topnav show a real name right after login. Left untouched when
+  // absent (e.g. the silent token refresh in lib/api.ts).
+  if (user && typeof window !== 'undefined') {
+    sessionStorage.setItem('ds_user', JSON.stringify({ name: user.name, email: user.email }))
+  }
 }

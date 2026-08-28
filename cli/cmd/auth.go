@@ -51,6 +51,7 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	// 4. Build config and save.
 	cfg := &config.Config{
 		APIKey:         apiKey,
+		SigningSecret:  me.SigningSecret,
 		UserID:         me.UserID,
 		OrgID:          me.OrgID,
 		Name:           me.Name,
