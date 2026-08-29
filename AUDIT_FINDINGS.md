@@ -33,8 +33,14 @@ references still resolve — gaps are expected.
   (`useManagerProject` / `useManagerUsers`) renders the standard `AlertTriangle` `EmptyState`
   instead of "not found"; a failed `useManagerSessions` shows an inline warning in place of
   the truncation notice so stats/charts no longer read as real zeros.
-- **F6 — Reconcile duplicates LLM work** across backend instances: separate instances select
-  the same stale `PENDING` rows and each dispatch the pipeline. Needs an atomic claim.
+- **F6 — Reconcile duplicated LLM work** across backend instances: separate instances
+  selected the same stale `PENDING` rows and each dispatched the pipeline. **FIXED** — each
+  candidate is now claimed with a conditional `session.updateMany({ where: { id,
+  evaluationStatus: 'PENDING', OR: [{ evaluatedAt: null }, { evaluatedAt: { lt: reclaimCutoff
+  } }] }, data: { evaluatedAt: now } })`; only the instance that gets `count === 1` dispatches.
+  A claim that never reaches a terminal status is retried after `RECLAIM_AFTER_MS` (15 min).
+  No migration — `evaluatedAt` doubles as the claim marker; nothing renders it for
+  non-terminal rows.
 - **F7 — Cross-host `NEXT_PUBLIC_API_URL` breaks the refresh cookie** (`SameSite=Lax` won't
   ride a cross-site XHR). Docs to steer deployments to the same-origin rewrite.
 
