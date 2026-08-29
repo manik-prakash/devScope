@@ -67,7 +67,7 @@ export default function SignupPage() {
     setServerError(null)
     try {
       const { data: tokens } = await api.post<AuthTokens>('/auth/register', data)
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false, tokens.user ?? { name: data.name, email: data.email }, tokens.refreshExpiresAt)
+      persistAuthTokens(tokens.accessToken, false, tokens.user ?? { name: data.name, email: data.email })
       router.push('/dashboard')
     } catch (err: unknown) {
       const msg =

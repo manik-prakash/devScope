@@ -4,9 +4,9 @@ import type { JwtPayload, UserRole } from './types'
 // ─── Cookie / storage keys ────────────────────────────────────────────────────
 
 const ACCESS_KEY       = 'ds_access'       // sessionStorage — cleared on tab close
-const REFRESH_KEY      = 'ds_refresh'      // 7-day cookie — survives tab close
 const ROLE_KEY         = 'ds_role'         // short-lived cookie — read by proxy.ts for route guards
 const MUST_CHANGE_KEY  = 'ds_must_change'  // short-lived cookie — proxy redirects to /change-password when set
+// ds_refresh is an HttpOnly cookie the backend sets/rotates/clears — never touched from JS.
 
 // ─── Access token (sessionStorage) ───────────────────────────────────────────
 
@@ -23,35 +23,6 @@ export function setAccessToken(token: string): void {
 export function clearAccessToken(): void {
   if (typeof window === 'undefined') return
   sessionStorage.removeItem(ACCESS_KEY)
-}
-
-// ─── Refresh token (cookie) ───────────────────────────────────────────────────
-
-export function getRefreshToken(): string | null {
-  return Cookies.get(REFRESH_KEY) ?? null
-}
-
-// js-cookie's `expires`: a Date (absolute) or a number of days. Prefer the
-// server-supplied refresh-token expiry so the cookie can't outlive — or die
-// before — the token the backend actually persisted.
-export function refreshCookieExpiry(expiresAt?: string): Date | number {
-  if (expiresAt) {
-    const d = new Date(expiresAt)
-    if (!Number.isNaN(d.getTime())) return d
-  }
-  return 7
-}
-
-export function setRefreshToken(token: string, expiresAt?: string): void {
-  Cookies.set(REFRESH_KEY, token, {
-    expires: refreshCookieExpiry(expiresAt),
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-  })
-}
-
-export function clearRefreshToken(): void {
-  Cookies.remove(REFRESH_KEY, { sameSite: 'strict' })
 }
 
 // ─── Role cookie (read by proxy.ts for server-side route guards) ──────────────
@@ -86,9 +57,9 @@ export function clearMustChangeCookie(): void {
 
 export function clearAllTokens(): void {
   clearAccessToken()
-  clearRefreshToken()
   clearRoleCookie()
   clearMustChangeCookie()
+  // ds_refresh is HttpOnly — cleared server-side by POST /auth/logout.
 }
 
 // ─── JWT decoding ─────────────────────────────────────────────────────────────
@@ -114,17 +85,16 @@ export function getUserFromToken(token: string): JwtPayload | null {
   return payload
 }
 
-// ─── Convenience: store both tokens after login ───────────────────────────────
+// ─── Convenience: persist the session after login/register/refresh ────────────
+// The refresh token is an HttpOnly cookie the backend set on the same response —
+// nothing to do with it here.
 
 export function persistAuthTokens(
   accessToken: string,
-  refreshToken: string,
   mustChangePass: boolean = false,
   user?: { name: string; email: string },
-  refreshExpiresAt?: string,
 ): void {
   setAccessToken(accessToken)
-  setRefreshToken(refreshToken, refreshExpiresAt)
   const payload = decodeJwt(accessToken)
   if (payload?.role) setRoleCookie(payload.role)
   if (mustChangePass) setMustChangeCookie()

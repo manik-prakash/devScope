@@ -15,27 +15,22 @@ function writeAccessToken(token: string): void {
   sessionStorage.setItem('ds_access', token)
 }
 
-function readRefreshToken(): string | null {
-  if (typeof document === 'undefined') return null
-  const match = document.cookie.match(/(?:^|;\s*)ds_refresh=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
-
 function clearTokens(): void {
   if (typeof window === 'undefined') return
   sessionStorage.removeItem('ds_access')
   sessionStorage.removeItem('ds_user')
-  document.cookie = 'ds_refresh=; Max-Age=0; path=/'
+  // ds_refresh is HttpOnly and backend-owned now — the server clears it on
+  // /auth/logout and on refresh-reuse detection. Only the client-set cookies
+  // are ours to drop here.
   document.cookie = 'ds_role=; Max-Age=0; path=/'
   document.cookie = 'ds_must_change=; Max-Age=0; path=/'
 }
 
 /**
- * Persist everything a /auth/refresh response carries — not just the access
- * token. `ds_user` lives in sessionStorage (gone on tab close) while the refresh
- * cookie lasts 7 days, so a silent refresh that only saved the token left every
- * returning user without a name until a full re-login. Cookie flags mirror
- * lib/auth.ts (SameSite=Strict, Secure in production, ~1 day).
+ * Persist what a /auth/refresh response carries — the access token plus display
+ * identity (`ds_user` lives in sessionStorage and dies on tab close). The
+ * refresh token itself is never in the body; it's the HttpOnly `ds_refresh`
+ * cookie the backend rotated.
  */
 export function applyRefreshedSession(data: RefreshResponse): void {
   if (typeof window === 'undefined') return
@@ -59,9 +54,13 @@ export function applyRefreshedSession(data: RefreshResponse): void {
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
+// Default to the same-origin path served by next.config.ts's rewrite, so the
+// HttpOnly ds_refresh cookie is sent on every call. An explicit
+// NEXT_PUBLIC_API_URL still wins for setups that talk to the backend directly.
 const api: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? '/api/v1',
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
   timeout: 15_000,
 })
 
@@ -123,19 +122,12 @@ api.interceptors.response.use(
     original._retry = true
     isRefreshing = true
 
-    const refreshToken = readRefreshToken()
-
-    if (!refreshToken) {
-      isRefreshing = false
-      clearTokens()
-      if (typeof window !== 'undefined') window.location.href = '/login'
-      return Promise.reject(error)
-    }
-
     try {
+      // The HttpOnly ds_refresh cookie rides along via withCredentials — no body.
       const { data } = await axios.post<RefreshResponse>(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'}/auth/refresh`,
-        { refreshToken },
+        `${api.defaults.baseURL}/auth/refresh`,
+        {},
+        { withCredentials: true },
       )
 
       applyRefreshedSession(data)

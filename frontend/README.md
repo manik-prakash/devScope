@@ -11,14 +11,16 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Needs `frontend/.env.local`:
+The backend must be running separately (`http://localhost:3001` by default).
+`next.config.ts` rewrites `/api/v1/*` to it, so the browser talks to the API
+same-origin (this is what lets the backend keep an HttpOnly refresh cookie).
+
+Optional `frontend/.env.local`:
 
 ```
-NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+API_PROXY_TARGET=http://localhost:3001      # backend origin the rewrite points at
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1   # only to bypass the rewrite
 ```
-
-The backend must be running separately, and its `CORS_ORIGINS` must include
-`http://localhost:3000`. There is no Next rewrite/proxy layer.
 
 ## Scripts
 

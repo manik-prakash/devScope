@@ -9,6 +9,8 @@ export function mockRes() {
   const res = {
     statusCode: 200 as number,
     body: undefined as unknown,
+    cookies: [] as Array<{ name: string; value: string; options: Record<string, unknown> }>,
+    clearedCookies: [] as Array<{ name: string; options: Record<string, unknown> }>,
     status: vi.fn((code: number) => {
       res.statusCode = code;
       return res;
@@ -18,6 +20,14 @@ export function mockRes() {
       return res;
     }),
     end: vi.fn(() => res),
+    cookie: vi.fn((name: string, value: string, options: Record<string, unknown> = {}) => {
+      res.cookies.push({ name, value, options });
+      return res;
+    }),
+    clearCookie: vi.fn((name: string, options: Record<string, unknown> = {}) => {
+      res.clearedCookies.push({ name, options });
+      return res;
+    }),
   };
   return res as typeof res & Response;
 }
@@ -27,6 +37,7 @@ type MockReqOverrides = Partial<{
   params: Record<string, string>;
   query: Record<string, unknown>;
   headers: Record<string, string>;
+  cookies: Record<string, string>;
   prisma: unknown;
   user: unknown;
   apiKey: unknown;
@@ -42,6 +53,7 @@ export function mockReq(overrides: MockReqOverrides = {}) {
     params: {},
     query: {},
     headers: {},
+    cookies: {},
     get: () => undefined,
     ...overrides,
   } as unknown as Request;

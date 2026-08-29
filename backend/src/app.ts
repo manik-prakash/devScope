@@ -20,6 +20,7 @@ import express, {
 } from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 
 import { env, corsOrigins } from './config/env.js'
 import { prismaMiddleware } from './middleware/prisma.js'
@@ -49,10 +50,11 @@ export function createApp(): Application {
     }),
   )
 
-  // ── Body parsing ──────────────────────────────────────────────────────
+  // ── Body & cookie parsing ────────────────────────────────────────────
   // 5 MB limit accommodates large session message logs from the CLI
   app.use(express.json({ limit: '5mb' }))
   app.use(express.urlencoded({ extended: true }))
+  app.use(cookieParser())
 
   // ── Database client ──────────────────────────────────────────────────
   app.use(prismaMiddleware)

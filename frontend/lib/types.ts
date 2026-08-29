@@ -15,12 +15,10 @@ export interface AuthUser {
 
 export interface AuthTokens {
   accessToken: string
-  refreshToken: string
   expiresIn: string
-  /** ISO timestamp — when the persisted refresh token expires (drives the cookie lifetime). */
-  refreshExpiresAt?: string
   mustChangePass?: boolean
   user?: AuthUser
+  // The refresh token is delivered as an HttpOnly `ds_refresh` cookie, not in the body.
 }
 
 export interface RefreshResponse {

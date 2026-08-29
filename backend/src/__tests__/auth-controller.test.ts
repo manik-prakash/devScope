@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { env } from '../config/env.js';
 import { loginSchema } from '../validators/auth.js';
-import { login, register, refresh } from '../controllers/auth.js';
+import { login, register, refresh, logout } from '../controllers/auth.js';
 import { mockReq, mockRes } from './helpers/http.js';
 
 const P2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -19,6 +19,8 @@ let HASH = '';
 beforeAll(async () => {
   HASH = await bcrypt.hash(PASSWORD, 10);
 });
+
+const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
 // ─── loginSchema ─────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ describe('login', () => {
       prisma: {
         organization: { findUnique: vi.fn().mockResolvedValue({ id: 'org-acme', slug: 'acme' }) },
         user: {
-          findFirst: vi.fn(), // legacy path — must not be used post-fix
+          findFirst: vi.fn(),
           findUnique: vi.fn(),
         },
         refreshToken: { create: vi.fn().mockResolvedValue({}) },
@@ -49,15 +51,17 @@ describe('login', () => {
     });
   }
 
+  // Factory, not a constant — HASH is only set in beforeAll, after the describe body runs.
+  const acmeUser = () => ({
+    id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
+    passwordHash: HASH, mustChangePass: false, name: 'Ada Lovelace', email: 'ada@acme.com',
+  });
+
   it('rejects login when the org slug is unknown', async () => {
     const req = reqWith({
       organization: { findUnique: vi.fn().mockResolvedValue(null) },
       user: {
-        // legacy findFirst would happily return a user by email alone
-        findFirst: vi.fn().mockResolvedValue({
-          id: 'u-other', orgId: 'org-other', role: 'DEVELOPER',
-          passwordHash: HASH, mustChangePass: false, name: 'Ada', email: 'ada@acme.com',
-        }),
+        findFirst: vi.fn().mockResolvedValue({ ...acmeUser(), id: 'u-other', orgId: 'org-other' }),
         findUnique: vi.fn().mockResolvedValue(null),
       },
     });
@@ -66,15 +70,11 @@ describe('login', () => {
   });
 
   it('authenticates the user in the named org, not another org with the same email', async () => {
-    const acmeUser = {
-      id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
-      passwordHash: HASH, mustChangePass: false, name: 'Ada', email: 'ada@acme.com',
-    };
     const req = reqWith({
       user: {
-        findFirst: vi.fn().mockResolvedValue({ ...acmeUser, id: 'u-other', orgId: 'org-other' }),
+        findFirst: vi.fn().mockResolvedValue({ ...acmeUser(), id: 'u-other', orgId: 'org-other' }),
         findUnique: vi.fn((args: { where: { orgId_email: { orgId: string } } }) =>
-          Promise.resolve(args.where.orgId_email.orgId === 'org-acme' ? acmeUser : null),
+          Promise.resolve(args.where.orgId_email.orgId === 'org-acme' ? acmeUser() : null),
         ),
       },
     });
@@ -90,15 +90,7 @@ describe('login', () => {
 
   it('rejects a wrong password with 401', async () => {
     const req = reqWith(
-      {
-        user: {
-          findFirst: vi.fn(),
-          findUnique: vi.fn().mockResolvedValue({
-            id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
-            passwordHash: HASH, mustChangePass: false, name: 'Ada', email: 'ada@acme.com',
-          }),
-        },
-      },
+      { user: { findFirst: vi.fn(), findUnique: vi.fn().mockResolvedValue(acmeUser()) } },
       { orgSlug: 'acme', email: 'ada@acme.com', password: 'wrong-password' },
     );
 
@@ -106,16 +98,7 @@ describe('login', () => {
   });
 
   it('includes user { name, email } in the response', async () => {
-    const acmeUser = {
-      id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
-      passwordHash: HASH, mustChangePass: false, name: 'Ada Lovelace', email: 'ada@acme.com',
-    };
-    const req = reqWith({
-      user: {
-        findFirst: vi.fn(),
-        findUnique: vi.fn().mockResolvedValue(acmeUser),
-      },
-    });
+    const req = reqWith({ user: { findFirst: vi.fn(), findUnique: vi.fn().mockResolvedValue(acmeUser()) } });
     const res = mockRes();
 
     await login(req, res);
@@ -126,25 +109,23 @@ describe('login', () => {
     });
   });
 
-  it('reports the refresh-token expiry so the browser cookie can match it', async () => {
-    const req = reqWith({
-      user: {
-        findFirst: vi.fn(),
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
-          passwordHash: HASH, mustChangePass: false, name: 'Ada', email: 'ada@acme.com',
-        }),
-      },
-    });
+  it('sets an httpOnly ds_refresh cookie and keeps the refresh token out of the JSON body', async () => {
+    const req = reqWith({ user: { findFirst: vi.fn(), findUnique: vi.fn().mockResolvedValue(acmeUser()) } });
     const res = mockRes();
 
     await login(req, res);
 
-    const body = res.body as { refreshExpiresAt?: string };
-    expect(typeof body.refreshExpiresAt).toBe('string');
-    expect(Number.isNaN(Date.parse(body.refreshExpiresAt as string))).toBe(false);
-    // ~7 days out by default, comfortably in the future.
-    expect(Date.parse(body.refreshExpiresAt as string)).toBeGreaterThan(Date.now() + 86_400_000);
+    const c = res.cookies.find((x) => x.name === 'ds_refresh');
+    expect(c).toBeDefined();
+    expect(c!.options.httpOnly).toBe(true);
+    expect(c!.options.sameSite).toBe('lax');
+    expect(typeof c!.value).toBe('string');
+    expect(c!.value.length).toBeGreaterThan(20);
+
+    const body = res.body as Record<string, unknown>;
+    expect(body.refreshToken).toBeUndefined();
+    expect(body.refreshExpiresAt).toBeUndefined();
+    expect(typeof body.accessToken).toBe('string');
   });
 });
 
@@ -165,7 +146,7 @@ describe('register', () => {
     });
   }
 
-  it('includes user { name, email } in the response', async () => {
+  it('includes user { name, email } and sets the refresh cookie', async () => {
     const req = reqWith(vi.fn().mockResolvedValue({
       id: 'u-acme', name: 'Ada Lovelace', email: 'ada@acme.com',
       orgId: 'org-acme', role: 'ADMIN',
@@ -174,15 +155,13 @@ describe('register', () => {
 
     await register(req, res);
 
-    expect((res.body as { user: unknown }).user).toEqual({
-      name: 'Ada Lovelace',
-      email: 'ada@acme.com',
-    });
+    expect((res.body as { user: unknown }).user).toEqual({ name: 'Ada Lovelace', email: 'ada@acme.com' });
+    expect(res.cookies.some((c) => c.name === 'ds_refresh' && c.options.httpOnly === true)).toBe(true);
+    expect((res.body as Record<string, unknown>).refreshToken).toBeUndefined();
   });
 
   it('returns 409 when a concurrent registration wins the slug race (P2002)', async () => {
     const req = reqWith(vi.fn().mockRejectedValue(P2002));
-
     await expect(register(req, mockRes())).rejects.toMatchObject({ statusCode: 409 });
   });
 });
@@ -190,33 +169,99 @@ describe('register', () => {
 // ─── refresh ────────────────────────────────────────────────────────────────
 
 describe('refresh', () => {
-  it('includes user { name, email } in the response', async () => {
-    const raw = 'a-refresh-token';
-    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
-    const req = mockReq({
-      body: { refreshToken: raw },
+  const userRow = {
+    orgId: 'org-acme', role: 'DEVELOPER', mustChangePass: false,
+    name: 'Ada Lovelace', email: 'ada@acme.com',
+  };
+
+  function reqWith(storedToken: unknown, extra: Record<string, unknown> = {}) {
+    return mockReq({
+      cookies: { ds_refresh: 'the-raw-token' },
       prisma: {
         refreshToken: {
-          findUnique: vi.fn().mockResolvedValue({
-            tokenHash,
-            revokedAt: null,
-            expiresAt: new Date(Date.now() + 86_400_000),
-            userId: 'u-acme',
-            user: {
-              orgId: 'org-acme', role: 'DEVELOPER', mustChangePass: false,
-              name: 'Ada Lovelace', email: 'ada@acme.com',
-            },
-          }),
+          findUnique: vi.fn().mockResolvedValue(storedToken),
+          update: vi.fn().mockResolvedValue({}),
+          create: vi.fn().mockResolvedValue({}),
+          updateMany: vi.fn().mockResolvedValue({ count: 3 }),
         },
+        $transaction: vi.fn().mockResolvedValue([{}, {}]),
+        ...extra,
       },
+    });
+  }
+
+  it('rotates the token: revokes the presented one, sets a new cookie, no refresh token in body', async () => {
+    const req = reqWith({
+      tokenHash: sha256('the-raw-token'),
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000),
+      userId: 'u-acme',
+      user: userRow,
     });
     const res = mockRes();
 
     await refresh(req, res);
 
-    expect((res.body as { user: unknown }).user).toEqual({
-      name: 'Ada Lovelace',
-      email: 'ada@acme.com',
+    const tx = (req.prisma as { $transaction: ReturnType<typeof vi.fn> }).$transaction;
+    expect(tx).toHaveBeenCalledTimes(1);
+
+    const c = res.cookies.find((x) => x.name === 'ds_refresh');
+    expect(c).toBeDefined();
+    expect(c!.options.httpOnly).toBe(true);
+    expect(c!.value).not.toBe('the-raw-token'); // a fresh token
+
+    const body = res.body as Record<string, unknown>;
+    expect(body.refreshToken).toBeUndefined();
+    expect(typeof body.accessToken).toBe('string');
+    expect((body.user as { email: string }).email).toBe('ada@acme.com');
+  });
+
+  it('detects reuse of a spent token: revokes the whole family, clears the cookie, 401', async () => {
+    const req = reqWith({
+      tokenHash: sha256('the-raw-token'),
+      revokedAt: new Date(Date.now() - 1000), // already revoked
+      expiresAt: new Date(Date.now() + 86_400_000),
+      userId: 'u-acme',
+      user: userRow,
     });
+    const res = mockRes();
+
+    await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
+
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'u-acme' }) }),
+    );
+    expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
+  });
+
+  it('401s when the token is unknown', async () => {
+    const req = reqWith(null);
+    await expect(refresh(req, mockRes())).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('401s when there is no cookie and no body token', async () => {
+    const req = mockReq({ cookies: {}, body: {}, prisma: { refreshToken: { findUnique: vi.fn() } } });
+    await expect(refresh(req, mockRes())).rejects.toMatchObject({ statusCode: 401 });
+  });
+});
+
+// ─── logout ─────────────────────────────────────────────────────────────────
+
+describe('logout', () => {
+  it('revokes the cookie token and clears the cookie', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const req = mockReq({
+      cookies: { ds_refresh: 'tok' },
+      user: { userId: 'u-acme' },
+      prisma: { refreshToken: { updateMany } },
+    });
+    const res = mockRes();
+
+    await logout(req, res);
+
+    expect(updateMany).toHaveBeenCalled();
+    expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
+    expect(res.statusCode).toBe(204);
   });
 });

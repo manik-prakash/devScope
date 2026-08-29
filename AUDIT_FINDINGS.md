@@ -26,7 +26,11 @@ and `manager.addProjectMember`'s new-user branch — 403 `SEAT_LIMIT`; no migrat
 R-02 interim (session-list endpoints now allow a 500-row page via `SESSION_LIST_MAX_LIMIT`, a
 shared `AGGREGATE_LIMIT`, "All time" relabelled "All loaded", and every affected screen
 captions its numbers as "the most recent N sessions" — a real aggregation endpoint is still
-the long-term fix).
+the long-term fix);
+R-08 + R-09 (`ds_refresh` is now an HttpOnly, backend-owned cookie — rotated on every
+`/auth/refresh` with revoked-token-reuse detection that kills the whole family; a Next
+`rewrites()` makes `/api/v1/*` same-origin so `SameSite=Lax` suffices; the frontend no longer
+reads or writes the refresh token).
 
 ## Validation summary
 
@@ -53,25 +57,6 @@ unchanged — `CLAUDE.md` documents it as deliberate ("a failed sync/status stil
 
 Evidence: `cli/cmd/sync.go:32-36`, `cli/cmd/status.go:63-67`, `cli/cmd/run.go` shipping path.
 
-## Remaining authentication and security findings
-
-### R-08 — Refresh tokens are reusable after refresh (P1)
-
-`/auth/refresh` validates the stored token and issues a new access token without rotating or
-revoking the refresh token. A stolen token stays replayable until expiry despite revocation
-fields existing in the schema.
-
-Evidence: `backend/src/controllers/auth.ts` (`refresh`), RefreshToken model in
-`backend/prisma/schema.prisma:260-277`.
-
-### R-09 — Refresh-token browser storage is JavaScript-readable (P1)
-
-The long-lived `ds_refresh` token is stored and read through `document.cookie`. `SameSite`
-and `Secure` do not prevent an XSS payload from exfiltrating it. A backend-owned HttpOnly
-cookie (set/read server-side, rotated on refresh) is the real fix.
-
-Evidence: `frontend/lib/auth.ts:28-44`, `frontend/lib/api.ts:18-30`.
-
 ## Remaining duplication and repository hygiene
 
 ### D-01 — Auth/token behavior is duplicated across frontend modules (P2)
@@ -95,7 +80,6 @@ checked without exposing the value.
 
 ## Recommended remaining order
 
-1. Refresh-token lifecycle and storage hardening (R-08, R-09).
-2. Decide on CLI exit semantics (R-01).
-3. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).
-4. `backend/.env` credential hygiene (D-05).
+1. Decide on CLI exit semantics (R-01).
+2. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).
+3. `backend/.env` credential hygiene (D-05).
