@@ -90,7 +90,7 @@ describe('createSession — evaluation dispatch', () => {
     // The row already exists and may still be PENDING because the first request's
     // pipeline is in flight — the second request must not start a second pipeline.
     const req = buildReq(signed(payloadBody()), {
-      existing: { id: 's1', evaluationStatus: 'PENDING', userId: 'user-1', orgId: 'org-1' },
+      existing: { id: 's1', evaluationStatus: 'PENDING', userId: 'user-1', orgId: 'org-1', projectId: 'proj-1' },
     });
     const res = mockRes();
 
@@ -99,6 +99,15 @@ describe('createSession — evaluation dispatch', () => {
     expect(evaluatePipelineMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(202);
     expect(res.body).toEqual({ session_id: 's1' });
+  });
+
+  it('409s when the id is reused for a different project (different telemetry)', async () => {
+    const req = buildReq(signed(payloadBody()), {
+      existing: { id: 's1', evaluationStatus: 'SCORED', userId: 'user-1', orgId: 'org-1', projectId: 'proj-other' },
+    });
+
+    await expect(createSession(req, mockRes())).rejects.toMatchObject({ statusCode: 409 });
+    expect(evaluatePipelineMock).not.toHaveBeenCalled();
   });
 
   it('409s when the session id already exists but belongs to another user', async () => {

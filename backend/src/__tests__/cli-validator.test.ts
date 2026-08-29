@@ -33,6 +33,17 @@ describe('SessionPayloadSchema', () => {
     expect(SessionPayloadSchema.safeParse({ ...base(), duration_ms: 1.5 }).success).toBe(false);
   });
 
+  it('rejects an implausibly large duration_ms', () => {
+    // ~1 year in ms — well past any real coding session.
+    expect(SessionPayloadSchema.safeParse({ ...base(), duration_ms: 32_000_000_000 }).success).toBe(false);
+  });
+
+  it('rejects an unbounded version string', () => {
+    expect(
+      SessionPayloadSchema.safeParse({ ...base(), cli_version: 'x'.repeat(100) }).success,
+    ).toBe(false);
+  });
+
   it('rejects an oversized messages array', () => {
     const messages = Array.from({ length: 5001 }, () => ({
       role: 'user',

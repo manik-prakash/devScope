@@ -190,7 +190,7 @@ export function activeProjectId(tab: string | null, firstId: string | undefined)
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 export function useDevDashboard(projectId: string | null) {
-  const { data: sessData, isLoading } = useDeveloperSessions(1, 100)
+  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, 100)
   const allSessions                   = sessData?.sessions ?? []
 
   // Distinct projects
@@ -239,5 +239,5 @@ export function useDevDashboard(projectId: string | null) {
   // Insights
   const insights  = useMemo(() => buildInsights(thisWeek, lastWeek), [thisWeek, lastWeek])
 
-  return { isLoading, projects, filtered, thisWeek, stats, trendData, radarData, insights }
+  return { isLoading, isError, projects, filtered, thisWeek, stats, trendData, radarData, insights }
 }

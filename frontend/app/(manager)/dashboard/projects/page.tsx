@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { FolderOpen, X, Loader2 } from 'lucide-react'
+import { FolderOpen, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -191,7 +191,7 @@ export default function ProjectsPage() {
   const queryClient  = useQueryClient()
   const [showModal, setShowModal] = useState(false)
 
-  const { data: projects = [], isLoading: projLoading } = useManagerProjects()
+  const { data: projects = [], isLoading: projLoading, isError: projError } = useManagerProjects()
   const { data: sessData }                               = useManagerSessions(1, 100)
   const allSessions                                      = sessData?.sessions ?? []
 
@@ -208,6 +208,19 @@ export default function ProjectsPage() {
     }
     return map
   }, [projects, allSessions])
+
+  if (projError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Projects" />
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load projects"
+          subtext="Something went wrong reaching the server. Refresh to try again."
+        />
+      </div>
+    )
+  }
 
   if (projLoading) {
     return (

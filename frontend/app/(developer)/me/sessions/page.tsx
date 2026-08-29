@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Activity } from 'lucide-react'
+import { Activity, AlertTriangle } from 'lucide-react'
 import { EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionCard } from '@/components/developer/SessionCard'
 import { useDeveloperSessions } from '@/lib/queries/sessions'
@@ -106,7 +106,7 @@ export default function MySessionsPage() {
   const [agentFilter,   setAgent]   = useState('')
   const [page, setPage]             = useState(1)
 
-  const { data: sessData, isLoading } = useDeveloperSessions(1, 200)
+  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, 200)
   const allSessions                   = sessData?.sessions ?? []
 
   // ── Derive filter options ──────────────────────────────────────────────────
@@ -149,6 +149,19 @@ export default function MySessionsPage() {
   }
 
   const hasFilters = dateRange !== '30' || projectFilter || agentFilter
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>Sessions</h1>
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load your sessions"
+          subtext="Something went wrong reaching the server. Refresh to try again."
+        />
+      </div>
+    )
+  }
 
   // ── Loading skeletons ──────────────────────────────────────────────────────
   if (isLoading) {

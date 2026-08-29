@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -6,6 +7,11 @@ import { env } from '../config/env.js';
 import { loginSchema } from '../validators/auth.js';
 import { login, register, refresh } from '../controllers/auth.js';
 import { mockReq, mockRes } from './helpers/http.js';
+
+const P2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+  code: 'P2002',
+  clientVersion: 'test',
+});
 
 const PASSWORD = 'secret12';
 let HASH = '';
@@ -119,26 +125,51 @@ describe('login', () => {
       email: 'ada@acme.com',
     });
   });
+
+  it('reports the refresh-token expiry so the browser cookie can match it', async () => {
+    const req = reqWith({
+      user: {
+        findFirst: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'u-acme', orgId: 'org-acme', role: 'DEVELOPER',
+          passwordHash: HASH, mustChangePass: false, name: 'Ada', email: 'ada@acme.com',
+        }),
+      },
+    });
+    const res = mockRes();
+
+    await login(req, res);
+
+    const body = res.body as { refreshExpiresAt?: string };
+    expect(typeof body.refreshExpiresAt).toBe('string');
+    expect(Number.isNaN(Date.parse(body.refreshExpiresAt as string))).toBe(false);
+    // ~7 days out by default, comfortably in the future.
+    expect(Date.parse(body.refreshExpiresAt as string)).toBeGreaterThan(Date.now() + 86_400_000);
+  });
 });
 
 // ─── register ───────────────────────────────────────────────────────────────
 
 describe('register', () => {
-  it('includes user { name, email } in the response', async () => {
-    const req = mockReq({
+  function reqWith(txImpl: unknown) {
+    return mockReq({
       body: {
         orgName: 'Acme', orgSlug: 'acme', name: 'Ada Lovelace',
         email: 'ada@acme.com', password: PASSWORD,
       },
       prisma: {
         organization: { findUnique: vi.fn().mockResolvedValue(null) },
-        $transaction: vi.fn().mockResolvedValue({
-          id: 'u-acme', name: 'Ada Lovelace', email: 'ada@acme.com',
-          orgId: 'org-acme', role: 'ADMIN',
-        }),
+        $transaction: txImpl,
         refreshToken: { create: vi.fn().mockResolvedValue({}) },
       },
     });
+  }
+
+  it('includes user { name, email } in the response', async () => {
+    const req = reqWith(vi.fn().mockResolvedValue({
+      id: 'u-acme', name: 'Ada Lovelace', email: 'ada@acme.com',
+      orgId: 'org-acme', role: 'ADMIN',
+    }));
     const res = mockRes();
 
     await register(req, res);
@@ -147,6 +178,12 @@ describe('register', () => {
       name: 'Ada Lovelace',
       email: 'ada@acme.com',
     });
+  });
+
+  it('returns 409 when a concurrent registration wins the slug race (P2002)', async () => {
+    const req = reqWith(vi.fn().mockRejectedValue(P2002));
+
+    await expect(register(req, mockRes())).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 

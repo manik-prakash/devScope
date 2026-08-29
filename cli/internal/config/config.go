@@ -213,6 +213,11 @@ func Set(key, value string) error {
 	if err := v.WriteConfigAs(ConfigPath()); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
+	// WriteConfigAs doesn't tighten an existing file — mirror Save so a
+	// pre-existing loose credential file gets hardened.
+	if err := os.Chmod(ConfigPath(), 0o600); err != nil {
+		return fmt.Errorf("failed to secure config permissions: %w", err)
+	}
 	return nil
 }
 
@@ -327,8 +332,14 @@ func ResolveProject(cfg *Config, flagSlug, repoSlug string) (*Project, error) {
 // in precedence (flag → repo file → global default). `run` and `status` use
 // this instead of passing an empty repo slug to ResolveProject.
 func ResolveProjectForDir(cfg *Config, flagSlug, dir string) (*Project, error) {
+	rc, err := LoadRepoConfig(dir)
+	if err != nil {
+		// A malformed/unreadable .devscope.yaml is worth failing on — silently
+		// falling back to the global default files sessions under the wrong project.
+		return nil, err
+	}
 	repoSlug := ""
-	if rc, err := LoadRepoConfig(dir); err == nil && rc != nil {
+	if rc != nil {
 		repoSlug = rc.Project
 	}
 	return ResolveProject(cfg, flagSlug, repoSlug)

@@ -51,7 +51,7 @@ export default function ChangePasswordPage() {
 
       // Refresh tokens were revoked server-side; persist the freshly issued pair
       // and clear the must-change cookie so the proxy stops trapping us here.
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false, tokens.user)
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, false, tokens.user, tokens.refreshExpiresAt)
 
       const role = decodeJwt(tokens.accessToken)?.role
       setSuccess('Password updated. Redirecting…')

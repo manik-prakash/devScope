@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { StatCard } from '@/components/shared'
+import { AlertTriangle } from 'lucide-react'
+import { StatCard, EmptyState } from '@/components/shared'
 import { ScoreTrendChart, ScoreRadarChart } from '@/components/charts'
 import { InsightCard } from '@/components/developer/InsightCard'
 import { useDevDashboard, type ProjectTab } from '@/lib/queries/me'
@@ -74,7 +75,7 @@ export default function MyStatsPage() {
     }
   }, [])
 
-  const { isLoading, projects, stats, trendData, radarData, insights } =
+  const { isLoading, isError, projects, stats, trendData, radarData, insights } =
     useDevDashboard(activeProject)
 
   // Set default project tab once loaded
@@ -85,6 +86,16 @@ export default function MyStatsPage() {
   }, [projects, activeProject])
 
   const firstName = userName.split(' ')[0]
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        heading="Couldn’t load your dashboard"
+        subtext="Something went wrong reaching the server. Refresh to try again."
+      />
+    )
+  }
 
   return (
     <div className="space-y-8">

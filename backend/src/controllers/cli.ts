@@ -109,9 +109,14 @@ export const createSession = async (req: Request, res: Response) => {
     }
     session = await req.prisma.session.findUnique({ where: { id: payload.session_id } });
     if (!session) throw err;
-    // The row exists but belongs to someone else — don't 202 "success" while
-    // silently dropping this caller's telemetry.
-    if (session.userId !== payload.user_id || session.orgId !== payload.org_id) {
+    // The row exists. A genuine CLI retry re-sends the identical session, which is
+    // a no-op 202. But if the id was reused for a different owner or project, this
+    // is *different* telemetry — 409 rather than silently dropping it.
+    if (
+      session.userId !== payload.user_id ||
+      session.orgId !== payload.org_id ||
+      session.projectId !== payload.project_id
+    ) {
       throw conflict('A session with this id already exists', 'SESSION_ID_TAKEN');
     }
   }

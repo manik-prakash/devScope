@@ -17,6 +17,16 @@ var builtInPatterns = []string{
 	`(?:gh[pousr]_[A-Za-z0-9_]{36,255})`,
 	// Private Keys
 	`(?:-----BEGIN\s+(?:RSA|OPENSSH|DSA|EC|PGP)?\s*PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA|OPENSSH|DSA|EC|PGP)?\s*PRIVATE\s+KEY-----)`,
+	// OpenAI / OpenRouter secret keys (sk-… and sk-or-…)
+	`sk-(?:or-)?[A-Za-z0-9-]{20,}`,
+	// Slack tokens (bot/user/app/refresh/legacy)
+	`xox[baprs]-[A-Za-z0-9-]{10,}`,
+	// Google API keys
+	`AIza[0-9A-Za-z_-]{20,}`,
+	// JSON Web Tokens
+	`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`,
+	// Credentials embedded in a URL (scheme://user:pass@host)
+	`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s/:@]+@`,
 }
 
 var compiledBuiltIns []*regexp.Regexp

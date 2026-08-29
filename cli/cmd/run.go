@@ -129,9 +129,9 @@ Example:
 		case "codex":
 			adapter = &adapters.CodexAdapter{}
 		default:
-			// Adapter not implemented yet.
-			fmt.Printf("devscope: Adapter for '%s' not implemented yet.\n", agentSlug)
-			return nil
+			// A bad agent name is a usage error, not a telemetry hiccup — exit
+			// non-zero so scripts/CI notice.
+			return fmt.Errorf("no telemetry adapter for agent %q (supported: claude-code, codex)", agentSlug)
 		}
 		
 		sess, err := adapter.ParseSessionFile(logFile)

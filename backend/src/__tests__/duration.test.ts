@@ -23,4 +23,14 @@ describe('parseDuration', () => {
     expect(parseDuration('7')).toBeNull();
     expect(parseDuration('7y')).toBeNull();
   });
+
+  it('returns null for a zero-length duration (would expire tokens instantly)', () => {
+    expect(parseDuration('0d')).toBeNull();
+    expect(parseDuration('0h')).toBeNull();
+  });
+
+  it('returns null for an absurdly large duration (Date overflow)', () => {
+    expect(parseDuration('99999d')).toBeNull();
+    expect(parseDuration('100000000h')).toBeNull();
+  });
 });

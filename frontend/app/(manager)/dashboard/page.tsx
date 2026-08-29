@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Activity } from 'lucide-react'
+import { Activity, AlertTriangle } from 'lucide-react'
 import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionVolumeChart, DeveloperBarChart } from '@/components/charts'
 import { useManagerSessions } from '@/lib/queries/sessions'
@@ -148,8 +148,8 @@ export default function DashboardPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
   // Fetch a larger slice for stat/chart computation, and the org record
-  const { data: statsData, isLoading: statsLoading } = useManagerSessions(1, 100)
-  const { data: tableData, isLoading: tableLoading } = useManagerSessions(1, 10)
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useManagerSessions(1, 100)
+  const { data: tableData, isLoading: tableLoading, isError: tableError } = useManagerSessions(1, 10)
   const { data: org }                                 = useManagerOrg()
 
   const allSessions   = statsData?.sessions ?? []
@@ -193,6 +193,19 @@ export default function DashboardPage() {
   // ── Chart data ──────────────────────────────────────────────────────────────
   const volumeData = useMemo(() => buildVolumeData(allSessions), [allSessions])
   const devBarData = useMemo(() => buildDevBarData(allSessions), [allSessions])
+
+  if (statsError && tableError) {
+    return (
+      <div className="space-y-8">
+        <PageHeader title="Overview" subtitle={org ? org.name : undefined} />
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load the dashboard"
+          subtext="Something went wrong reaching the server. Refresh to try again."
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">

@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DevScope — frontend
 
-## Getting Started
+Manager and developer dashboards for [DevScope](../README.md). Next.js 16 (App Router,
+Turbopack) + React 19 + Tailwind 4 (CSS‑first) + TanStack Query. Reads the session scores and
+trends produced by [`backend/`](../backend/); it does not talk to the CLI.
 
-First, run the development server:
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Needs `frontend/.env.local`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The backend must be running separately, and its `CORS_ORIGINS` must include
+`http://localhost:3000`. There is no Next rewrite/proxy layer.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | What |
+|---|---|
+| `npm run dev` | dev server |
+| `npm run build` / `npm run start` | production build / serve |
+| `npm run lint` | ESLint (flat config) |
+| `npm test` | Vitest (`vitest run`) |
+| `npx tsc --noEmit` | type‑check (no `typecheck` script) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Layout notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Route groups: `(auth)` (no providers), `(developer)` → `/me`, `(manager)` → `/dashboard`.
+- `middleware.ts` is renamed **`proxy.ts`** (edge route guard; defense‑in‑depth only).
+- One axios instance in `lib/api.ts` (single‑flight 401 refresh). Access token in
+  `sessionStorage`; `ds_refresh` / `ds_role` / `ds_must_change` in cookies.
+- Dark theme only; design tokens in `app/globals.css`. Charts use `recharts`.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`AGENTS.md`](AGENTS.md) — this is not the Next.js in your training data.

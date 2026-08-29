@@ -46,7 +46,7 @@ function LoginForm() {
         password: data.password,
       })
 
-      persistAuthTokens(tokens.accessToken, tokens.refreshToken, tokens.mustChangePass ?? false, tokens.user)
+      persistAuthTokens(tokens.accessToken, tokens.refreshToken, tokens.mustChangePass ?? false, tokens.user, tokens.refreshExpiresAt)
 
       // First-login users must set a new password before doing anything else
       if (tokens.mustChangePass) {

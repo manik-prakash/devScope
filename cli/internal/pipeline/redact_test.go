@@ -72,6 +72,55 @@ func TestRedactSession_BuiltIns(t *testing.T) {
 	}
 }
 
+func TestRedactSession_BuiltIns_ExpandedFamilies(t *testing.T) {
+	// Fixtures are assembled from fragments at runtime so the source file holds
+	// no literal that looks like a real provider secret — GitHub push protection
+	// blocks commits that contain one.
+	p := func(parts ...string) string { return strings.Join(parts, "") }
+	body := strings.Repeat("a1B2c3D4", 6) // 48 chars of [A-Za-z0-9]
+
+	skKey := p("s", "k", "-") + body
+	skOr := p("s", "k", "-", "o", "r", "-") + body
+	slack := p("x", "o", "x", "b", "-") + body
+	goog := p("A", "I", "z", "a") + body
+	jwtSeg := p("e", "y", "J") + strings.Repeat("x", 24)
+	jwt := jwtSeg + "." + jwtSeg + "." + strings.Repeat("z", 20)
+	urlPass := strings.Repeat("q", 16)
+
+	cases := []struct {
+		name    string
+		content string
+		leak    string // substring that must NOT survive
+	}{
+		{"openai key", "use " + skKey + " as the key", skKey},
+		{"openrouter key", "OPENROUTER_API_KEY=" + skOr, skOr},
+		{"slack token", "token " + slack, slack},
+		{"google api key", "key " + goog, goog},
+		{"jwt", "Authorization " + jwt, jwtSeg},
+		{"url basic auth", "clone https://user:" + urlPass + "@example.invalid/x.git", urlPass},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sess := &adapters.NormalizedSession{
+				SessionID: "s",
+				Messages:  []adapters.NormalizedMessage{{Role: "user", Content: tc.content, ContentLength: len(tc.content)}},
+			}
+			out, counts, err := RedactSession(sess, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := out.Messages[0].Content
+			if counts == 0 || !contains(got, "[REDACTED]") || contains(got, tc.leak) {
+				t.Errorf("secret not redacted (counts=%d): %q", counts, got)
+			}
+			if out.Messages[0].ContentLength != len(tc.content) {
+				t.Errorf("ContentLength changed: %d != %d", out.Messages[0].ContentLength, len(tc.content))
+			}
+		})
+	}
+}
+
 func TestRedactSession_CustomPatterns(t *testing.T) {
 	sess := &adapters.NormalizedSession{
 		SessionID: "custom-sess",

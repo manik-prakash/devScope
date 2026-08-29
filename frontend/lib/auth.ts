@@ -31,9 +31,20 @@ export function getRefreshToken(): string | null {
   return Cookies.get(REFRESH_KEY) ?? null
 }
 
-export function setRefreshToken(token: string): void {
+// js-cookie's `expires`: a Date (absolute) or a number of days. Prefer the
+// server-supplied refresh-token expiry so the cookie can't outlive — or die
+// before — the token the backend actually persisted.
+export function refreshCookieExpiry(expiresAt?: string): Date | number {
+  if (expiresAt) {
+    const d = new Date(expiresAt)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return 7
+}
+
+export function setRefreshToken(token: string, expiresAt?: string): void {
   Cookies.set(REFRESH_KEY, token, {
-    expires: 7,
+    expires: refreshCookieExpiry(expiresAt),
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
   })
@@ -110,9 +121,10 @@ export function persistAuthTokens(
   refreshToken: string,
   mustChangePass: boolean = false,
   user?: { name: string; email: string },
+  refreshExpiresAt?: string,
 ): void {
   setAccessToken(accessToken)
-  setRefreshToken(refreshToken)
+  setRefreshToken(refreshToken, refreshExpiresAt)
   const payload = decodeJwt(accessToken)
   if (payload?.role) setRoleCookie(payload.role)
   if (mustChangePass) setMustChangeCookie()

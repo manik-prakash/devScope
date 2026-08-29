@@ -2,7 +2,7 @@ import { type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
-import { type PrismaClient, type User } from '@prisma/client';
+import { Prisma, type PrismaClient, type User } from '@prisma/client';
 import { env } from '../config/env.js';
 import { unauthorized, conflict } from '../utils/errors.js';
 import { loginSchema, refreshSchema, changePasswordSchema, registerSchema } from '../validators/auth.js';
@@ -14,6 +14,9 @@ interface IssuedTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: string;
+  // ISO timestamp — lets the browser set its ds_refresh cookie to the same
+  // lifetime the server persisted, instead of a hard-coded 7 days.
+  refreshExpiresAt: string;
 }
 
 async function issueTokens(user: Pick<User, 'id' | 'orgId' | 'role'>, prisma: PrismaClient): Promise<IssuedTokens> {
@@ -44,6 +47,7 @@ async function issueTokens(user: Pick<User, 'id' | 'orgId' | 'role'>, prisma: Pr
     accessToken,
     refreshToken: rawRefreshToken,
     expiresIn: env.JWT_EXPIRES_IN,
+    refreshExpiresAt: expiresAt.toISOString(),
   };
 }
 
@@ -125,27 +129,37 @@ export const register = async (req: Request, res: Response) => {
   const passwordHash = await bcrypt.hash(password, 10);
 
   // Create org + admin user + backfill ownerId atomically. We use the interactive
-  // form because the org.update needs the just-created user.id.
-  const user = await req.prisma.$transaction(async (tx) => {
-    const org = await tx.organization.create({
-      data: { name: orgName, slug: orgSlug, plan: 'FREE', seats: 5 },
+  // form because the org.update needs the just-created user.id. The pre-check
+  // above races a concurrent registration; the unique constraint is the real
+  // guard, so translate its violation into the same 409 (like createProject).
+  let user;
+  try {
+    user = await req.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: { name: orgName, slug: orgSlug, plan: 'FREE', seats: 5 },
+      });
+      const created = await tx.user.create({
+        data: {
+          orgId: org.id,
+          email,
+          name,
+          role: 'ADMIN',
+          passwordHash,
+          mustChangePass: false,
+        },
+      });
+      await tx.organization.update({
+        where: { id: org.id },
+        data: { ownerId: created.id },
+      });
+      return created;
     });
-    const created = await tx.user.create({
-      data: {
-        orgId: org.id,
-        email,
-        name,
-        role: 'ADMIN',
-        passwordHash,
-        mustChangePass: false,
-      },
-    });
-    await tx.organization.update({
-      where: { id: org.id },
-      data: { ownerId: created.id },
-    });
-    return created;
-  });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw conflict('Organization slug already taken', 'ORG_SLUG_TAKEN');
+    }
+    throw err;
+  }
 
   const tokens = await issueTokens(user, req.prisma);
 

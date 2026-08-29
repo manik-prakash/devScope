@@ -16,6 +16,8 @@ export interface AuthTokens {
   accessToken: string
   refreshToken: string
   expiresIn: string
+  /** ISO timestamp — when the persisted refresh token expires (drives the cookie lifetime). */
+  refreshExpiresAt?: string
   mustChangePass?: boolean
   user?: AuthUser
 }

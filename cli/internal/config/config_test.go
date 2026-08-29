@@ -130,6 +130,33 @@ func TestSetAndGet(t *testing.T) {
 	}
 }
 
+// TestSet_TightensExistingFileMode — the config holds the API key + signing
+// secret, so Set (Viper's WriteConfigAs path) must harden an existing loose file
+// just like Save does.
+func TestSet_TightensExistingFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix file modes not meaningful on Windows")
+	}
+	tmp := t.TempDir()
+	devScopeDir = tmp
+
+	if err := os.WriteFile(ConfigPath(), []byte("api_key: old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Set("default_project", "p1"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	info, err := os.Stat(ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("config mode = %o, want 600", perm)
+	}
+}
+
 // TestDeleteConfig verifies Delete removes the config file.
 func TestDeleteConfig(t *testing.T) {
 	tmp := t.TempDir()
@@ -252,6 +279,16 @@ func TestResolveProjectForDir(t *testing.T) {
 	}
 	if p.Slug != "default-proj" {
 		t.Errorf("expected default-proj fallback, got %s", p.Slug)
+	}
+
+	// A malformed .devscope.yaml must surface an error, not silently use the
+	// global default (which would file sessions under the wrong project).
+	badDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(badDir, ".devscope.yaml"), []byte("project: [unterminated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveProjectForDir(cfg, "", badDir); err == nil {
+		t.Error("expected an error for a malformed .devscope.yaml")
 	}
 }
 
