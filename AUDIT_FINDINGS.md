@@ -13,9 +13,11 @@ references still resolve — gaps are expected.
 - **F1 — CLI auth tests were not isolated.** `overrideConfigDir` ignored its temp-dir arg and
   wrote to (and deleted on cleanup) the real `~/.devscope`. **FIXED** — it now calls
   `config.SetDirForTest(dir)`; `TestAuthTestsAreIsolated` guards it.
-- **F2 — Refresh-token rotation race.** Concurrent `/auth/refresh` with one cookie can both
-  pass the `revokedAt` check and each mint a replacement. Needs a conditional
-  `revokedAt: null` revoke inside the rotation transaction.
+- **F2 — Refresh-token rotation race.** Concurrent `/auth/refresh` with one cookie could both
+  pass the `revokedAt` check and each mint a replacement. **FIXED** — rotation now runs an
+  interactive `$transaction` whose revoke is conditional (`where: { tokenHash, revokedAt:
+  null }`); `count === 0` means another request already rotated, and is handled exactly like
+  token reuse (`revokeTokenFamily` + clear cookie + 401). Shared `revokeTokenFamily` helper.
 - **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counts users before
   `user.create` with no lock; concurrent invites exceed `Organization.seats`. Needs a
   `SELECT … FOR UPDATE` on the org row inside the check+create transaction.

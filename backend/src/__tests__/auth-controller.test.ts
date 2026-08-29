@@ -174,17 +174,29 @@ describe('refresh', () => {
     name: 'Ada Lovelace', email: 'ada@acme.com',
   };
 
-  function reqWith(storedToken: unknown, extra: Record<string, unknown> = {}) {
+  function reqWith(
+    storedToken: unknown,
+    { rotateCount = 1, extra = {} }: { rotateCount?: number; extra?: Record<string, unknown> } = {},
+  ) {
     return mockReq({
       cookies: { ds_refresh: 'the-raw-token' },
       prisma: {
         refreshToken: {
           findUnique: vi.fn().mockResolvedValue(storedToken),
-          update: vi.fn().mockResolvedValue({}),
           create: vi.fn().mockResolvedValue({}),
+          // family revoke (reuse / lost-race path)
           updateMany: vi.fn().mockResolvedValue({ count: 3 }),
         },
-        $transaction: vi.fn().mockResolvedValue([{}, {}]),
+        // interactive form: run the callback with a tx client whose conditional
+        // revoke reports `rotateCount` rows touched (0 = this request lost the race).
+        $transaction: vi.fn().mockImplementation((cb: (tx: unknown) => unknown) =>
+          cb({
+            refreshToken: {
+              updateMany: vi.fn().mockResolvedValue({ count: rotateCount }),
+              create: vi.fn().mockResolvedValue({}),
+            },
+          }),
+        ),
         ...extra,
       },
     });
@@ -231,6 +243,28 @@ describe('refresh', () => {
     const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
     expect(rt.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ userId: 'u-acme' }) }),
+    );
+    expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
+  });
+
+  it('treats a lost rotation race like reuse: revokes the family, clears the cookie, 401', async () => {
+    const req = reqWith(
+      {
+        tokenHash: sha256('the-raw-token'),
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        userId: 'u-acme',
+        user: userRow,
+      },
+      { rotateCount: 0 }, // conditional revoke matched nothing — another request already rotated this token
+    );
+    const res = mockRes();
+
+    await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
+
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'u-acme', revokedAt: null }) }),
     );
     expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
   });

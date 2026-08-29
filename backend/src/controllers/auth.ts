@@ -32,6 +32,18 @@ function clearRefreshCookie(res: Response): void {
   res.clearCookie(REFRESH_COOKIE, { path: '/' });
 }
 
+// Revoke every still-active refresh token for a user. Used whenever a spent
+// token is presented again — either an explicit replay or a lost rotation race.
+async function revokeTokenFamily(
+  prisma: Pick<PrismaClient, 'refreshToken'>,
+  userId: string,
+): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
 function newRefreshToken(): { raw: string; hash: string; expiresAt: Date } {
   const raw = crypto.randomBytes(40).toString('hex');
   return { raw, hash: sha256(raw), expiresAt: new Date(Date.now() + REFRESH_TTL_MS) };
@@ -105,22 +117,34 @@ export const refresh = async (req: Request, res: Response) => {
 
   if (stored.revokedAt) {
     // A spent token was replayed — assume theft and revoke the whole family.
-    await req.prisma.refreshToken.updateMany({
-      where: { userId: stored.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    await revokeTokenFamily(req.prisma, stored.userId);
     clearRefreshCookie(res);
     throw unauthorized('Refresh token reuse detected — please sign in again');
   }
 
-  // Rotate: revoke the presented token and mint a fresh one atomically.
+  // Rotate atomically: revoke the presented token *only if it is still active*
+  // (`revokedAt: null` in the WHERE), then mint its replacement. Two concurrent
+  // refreshes with the same cookie both reach here; Postgres re-checks the WHERE
+  // under the row lock so exactly one gets `count === 1`. The loser (`count ===
+  // 0`) is treated like replaying a spent token.
   const next = newRefreshToken();
-  await req.prisma.$transaction([
-    req.prisma.refreshToken.update({ where: { tokenHash }, data: { revokedAt: new Date() } }),
-    req.prisma.refreshToken.create({
+  const rotated = await req.prisma.$transaction(async (tx) => {
+    const revoked = await tx.refreshToken.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (revoked.count === 0) return false;
+    await tx.refreshToken.create({
       data: { userId: stored.userId, tokenHash: next.hash, expiresAt: next.expiresAt },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!rotated) {
+    await revokeTokenFamily(req.prisma, stored.userId);
+    clearRefreshCookie(res);
+    throw unauthorized('Refresh token reuse detected — please sign in again');
+  }
 
   const signOptions: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as any };
   const accessToken = jwt.sign(
