@@ -1,25 +1,12 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios'
 import type { RefreshResponse } from './types'
-
-// ─── Token storage helpers (inline to avoid circular import with auth.ts) ─────
-// auth.ts is built in Step 3 — these thin helpers are duplicated intentionally
-// so api.ts has no dependency on auth.ts.
-
-function readAccessToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return sessionStorage.getItem('ds_access')
-}
-
-function writeAccessToken(token: string): void {
-  if (typeof window === 'undefined') return
-  sessionStorage.setItem('ds_access', token)
-}
+import { getAccessToken, setAccessToken, clearAccessToken, setStoredUser, clearStoredUser } from './token-storage'
 
 function clearTokens(): void {
   if (typeof window === 'undefined') return
-  sessionStorage.removeItem('ds_access')
-  sessionStorage.removeItem('ds_user')
-  // ds_refresh is HttpOnly and backend-owned now — the server clears it on
+  clearAccessToken()
+  clearStoredUser()
+  // ds_refresh is HttpOnly and backend-owned — the server clears it on
   // /auth/logout and on refresh-reuse detection. Only the client-set cookies
   // are ours to drop here.
   document.cookie = 'ds_role=; Max-Age=0; path=/'
@@ -35,14 +22,8 @@ function clearTokens(): void {
 export function applyRefreshedSession(data: RefreshResponse): void {
   if (typeof window === 'undefined') return
 
-  writeAccessToken(data.accessToken)
-
-  if (data.user) {
-    sessionStorage.setItem(
-      'ds_user',
-      JSON.stringify({ name: data.user.name, email: data.user.email }),
-    )
-  }
+  setAccessToken(data.accessToken)
+  if (data.user) setStoredUser(data.user)
 
   if (data.mustChangePass !== undefined) {
     const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
@@ -67,7 +48,7 @@ const api: AxiosInstance = axios.create({
 // ─── Request interceptor — attach access token ────────────────────────────────
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = readAccessToken()
+  const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }

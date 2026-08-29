@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
-import { getAccessToken, clearAllTokens, decodeJwt } from '@/lib/auth'
+import { getAccessToken, getStoredUser, clearAllTokens, decodeJwt } from '@/lib/auth'
 import { initials } from '@/lib/utils'
 import { Logo } from '@/components/shared'
 import api from '@/lib/api'
@@ -110,12 +110,9 @@ export function Sidebar() {
     if (!payload) return
     // The JWT only has sub/orgId/role — fetch name from a cached source if available
     // For now we display what we have; Step 8 will populate name via /manager/org
-    const stored = sessionStorage.getItem('ds_user')
-    if (stored) {
-      try { setUser(JSON.parse(stored) as UserInfo) } catch { /* ignore */ }
-    } else {
-      setUser({ name: 'Manager', email: '', role: payload.role })
-    }
+    const u = getStoredUser()
+    if (u) setUser(u as unknown as UserInfo)
+    else setUser({ name: 'Manager', email: '', role: payload.role })
   }, [])
 
   async function handleLogout() {
@@ -124,8 +121,7 @@ export function Sidebar() {
       // The HttpOnly ds_refresh cookie is sent automatically; the server revokes + clears it.
       await api.post('/auth/logout')
     } catch { /* best-effort */ } finally {
-      clearAllTokens()
-      sessionStorage.removeItem('ds_user')
+      clearAllTokens() // also clears ds_user
       router.push('/login')
     }
   }

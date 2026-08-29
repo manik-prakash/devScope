@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-import { getAccessToken, clearAllTokens, decodeJwt } from '@/lib/auth'
+import { getAccessToken, getStoredUser, clearAllTokens, decodeJwt } from '@/lib/auth'
 import { initials } from '@/lib/utils'
 import { Logo } from '@/components/shared'
 import api from '@/lib/api'
@@ -64,13 +64,8 @@ export function Topnav() {
   const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('ds_user')
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored) as UserInfo)
-        return
-      } catch { /* ignore */ }
-    }
+    const u = getStoredUser()
+    if (u) { setUser(u); return }
     const token = getAccessToken()
     if (!token) return
     const payload = decodeJwt(token)
@@ -83,8 +78,7 @@ export function Topnav() {
       // The HttpOnly ds_refresh cookie is sent automatically; the server revokes + clears it.
       await api.post('/auth/logout')
     } catch { /* best-effort */ } finally {
-      clearAllTokens()
-      sessionStorage.removeItem('ds_user')
+      clearAllTokens() // also clears ds_user
       router.push('/login')
     }
   }

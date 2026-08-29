@@ -7,7 +7,7 @@ import { ScoreTrendChart, ScoreRadarChart } from '@/components/charts'
 import { InsightCard } from '@/components/developer/InsightCard'
 import { useDevDashboard, type ProjectTab } from '@/lib/queries/me'
 import { formatScore } from '@/lib/utils'
-import { getAccessToken, decodeJwt } from '@/lib/auth'
+import { getAccessToken, getStoredUser, decodeJwt } from '@/lib/auth'
 
 // ─── Project tab switcher ─────────────────────────────────────────────────────
 
@@ -59,13 +59,8 @@ export default function MyStatsPage() {
 
   // Resolve display name from sessionStorage or JWT
   useEffect(() => {
-    const stored = sessionStorage.getItem('ds_user')
-    if (stored) {
-      try {
-        const u = JSON.parse(stored) as { name?: string }
-        if (u.name) { setUserName(u.name); return }
-      } catch { /* ignore */ }
-    }
+    const u = getStoredUser()
+    if (u?.name) { setUserName(u.name); return }
     // Fall back to first name from token sub if name is an email-like string
     const token = getAccessToken()
     if (!token) return

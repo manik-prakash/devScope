@@ -7,7 +7,8 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import api from '@/lib/api'
-import { persistAuthTokens } from '@/lib/auth'
+import { persistAuthTokens, getStoredUser } from '@/lib/auth'
+import { setStoredUser } from '@/lib/token-storage'
 import type { AuthTokens } from '@/lib/types'
 
 // ─── Reusable field ───────────────────────────────────────────────────────────
@@ -116,14 +117,9 @@ function ProfileSection({ initialName, initialEmail }: ProfileSectionProps) {
     try {
       await api.patch('/developer/me', { name: data.name })
       setSuccess('Saved!')
-      // Update sessionStorage user info so the topnav reflects the new name
-      try {
-        const stored = sessionStorage.getItem('ds_user')
-        if (stored) {
-          const u = JSON.parse(stored)
-          sessionStorage.setItem('ds_user', JSON.stringify({ ...u, name: data.name }))
-        }
-      } catch { /* ignore */ }
+      // Update the cached identity so the topnav reflects the new name
+      const cached = getStoredUser()
+      if (cached) setStoredUser({ ...cached, name: data.name })
       setTimeout(() => setSuccess(null), 3000)
     } catch (err: unknown) {
       const msg =
@@ -285,15 +281,8 @@ export default function MySettingsPage() {
   const [user, setUser] = useState<SettingsUser | null>(null)
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('ds_user')
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as Partial<SettingsUser>
-        setUser({ name: parsed.name ?? '', email: parsed.email ?? '' })
-        return
-      } catch { /* ignore */ }
-    }
-    setUser({ name: '', email: '' })
+    const parsed = getStoredUser()
+    setUser({ name: parsed?.name ?? '', email: parsed?.email ?? '' })
   }, [])
 
   if (!user) {

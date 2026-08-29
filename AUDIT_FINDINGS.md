@@ -30,7 +30,9 @@ the long-term fix);
 R-08 + R-09 (`ds_refresh` is now an HttpOnly, backend-owned cookie — rotated on every
 `/auth/refresh` with revoked-token-reuse detection that kills the whole family; a Next
 `rewrites()` makes `/api/v1/*` same-origin so `SameSite=Lax` suffices; the frontend no longer
-reads or writes the refresh token).
+reads or writes the refresh token);
+D-01 (the `ds_access` / `ds_user` accessors now live once in `lib/token-storage.ts` — `lib/auth.ts`,
+`lib/api.ts` and 5 components import it instead of touching `sessionStorage` directly).
 
 ## Validation summary
 
@@ -59,12 +61,6 @@ Evidence: `cli/cmd/sync.go:32-36`, `cli/cmd/status.go:63-67`, `cli/cmd/run.go` s
 
 ## Remaining duplication and repository hygiene
 
-### D-01 — Auth/token behavior is duplicated across frontend modules (P2)
-
-`frontend/lib/auth.ts` and `frontend/lib/api.ts` independently implement token access,
-refresh, cookie handling, and cleanup. The two paths already differ in which cookies they
-touch and can drift further when session-state changes are made.
-
 ### D-03 — Pagination/filter UI remains repeated (P2)
 
 The session screens repeat filter and pagination components (e.g. a `PaginationBar`
@@ -81,5 +77,5 @@ checked without exposing the value.
 ## Recommended remaining order
 
 1. Decide on CLI exit semantics (R-01).
-2. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).
+2. Consolidate the per-screen pagination/filter UI (D-03).
 3. `backend/.env` credential hygiene (D-05).

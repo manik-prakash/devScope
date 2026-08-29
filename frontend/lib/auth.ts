@@ -1,29 +1,21 @@
 import Cookies from 'js-cookie'
 import type { JwtPayload, UserRole } from './types'
+import {
+  setAccessToken,
+  clearAccessToken,
+  setStoredUser,
+  clearStoredUser,
+} from './token-storage'
 
-// ─── Cookie / storage keys ────────────────────────────────────────────────────
+// ─── Cookie keys ─────────────────────────────────────────────────────────────
 
-const ACCESS_KEY       = 'ds_access'       // sessionStorage — cleared on tab close
 const ROLE_KEY         = 'ds_role'         // short-lived cookie — read by proxy.ts for route guards
 const MUST_CHANGE_KEY  = 'ds_must_change'  // short-lived cookie — proxy redirects to /change-password when set
 // ds_refresh is an HttpOnly cookie the backend sets/rotates/clears — never touched from JS.
 
-// ─── Access token (sessionStorage) ───────────────────────────────────────────
-
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(ACCESS_KEY)
-}
-
-export function setAccessToken(token: string): void {
-  if (typeof window === 'undefined') return
-  sessionStorage.setItem(ACCESS_KEY, token)
-}
-
-export function clearAccessToken(): void {
-  if (typeof window === 'undefined') return
-  sessionStorage.removeItem(ACCESS_KEY)
-}
+// The sessionStorage accessors live in ./token-storage (no deps → no import cycle);
+// re-export the reads so existing `@/lib/auth` imports keep working.
+export { getAccessToken, getStoredUser } from './token-storage'
 
 // ─── Role cookie (read by proxy.ts for server-side route guards) ──────────────
 
@@ -57,6 +49,7 @@ export function clearMustChangeCookie(): void {
 
 export function clearAllTokens(): void {
   clearAccessToken()
+  clearStoredUser()
   clearRoleCookie()
   clearMustChangeCookie()
   // ds_refresh is HttpOnly — cleared server-side by POST /auth/logout.
@@ -102,7 +95,5 @@ export function persistAuthTokens(
   // The JWT carries only sub/orgId/role — persist the display identity separately
   // so the sidebar/topnav show a real name right after login. Left untouched when
   // absent (e.g. the silent token refresh in lib/api.ts).
-  if (user && typeof window !== 'undefined') {
-    sessionStorage.setItem('ds_user', JSON.stringify({ name: user.name, email: user.email }))
-  }
+  if (user) setStoredUser(user)
 }

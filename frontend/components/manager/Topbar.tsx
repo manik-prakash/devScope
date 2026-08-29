@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getAccessToken, decodeJwt } from '@/lib/auth'
+import { getAccessToken, getStoredUser, decodeJwt } from '@/lib/auth'
 import { initials } from '@/lib/utils'
 
 // ─── Derive page title from pathname ──────────────────────────────────────────
@@ -30,14 +30,8 @@ export function Topbar() {
   const [userInitials, setUserInitials] = useState('M')
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('ds_user')
-    if (stored) {
-      try {
-        const u = JSON.parse(stored) as { name: string }
-        setUserInitials(initials(u.name))
-        return
-      } catch { /* ignore */ }
-    }
+    const u = getStoredUser()
+    if (u) { setUserInitials(initials(u.name)); return }
     // Fallback: decode from token
     const token = getAccessToken()
     if (!token) return
