@@ -6,6 +6,7 @@ import { conflict, forbidden, notFound } from '../utils/errors.js';
 import { createProjectSchema, inviteEngineerSchema } from '../validators/manager.js';
 import { parsePageParams } from '../utils/pagination.js';
 import { scoreDetailInclude } from '../utils/sessionSelect.js';
+import { assertSeatAvailable } from '../utils/seats.js';
 
 export const getOrg = async (req: Request, res: Response) => {
   const org = await req.prisma.organization.findUnique({
@@ -178,7 +179,10 @@ export const addProjectMember = async (req: Request, res: Response) => {
     return;
   }
 
-  // Fresh user — create with temp password + ProjectMember in one transaction
+  // Fresh user — consumes a seat, so enforce the org limit first.
+  await assertSeatAvailable(req.prisma, req.user!.orgId);
+
+  // Create with temp password + ProjectMember in one transaction
   const tempPassword = crypto.randomBytes(9).toString('base64url');
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 

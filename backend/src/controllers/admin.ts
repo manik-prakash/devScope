@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { inviteManagerSchema, deleteOrgSchema } from '../validators/admin.js';
+import { assertSeatAvailable } from '../utils/seats.js';
 
 export const getUsers = async (req: Request, res: Response) => {
   const users = await req.prisma.user.findMany({
@@ -24,6 +25,8 @@ export const getUsers = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   const { name, email, role } = inviteManagerSchema.parse(req.body);
+
+  await assertSeatAvailable(req.prisma, req.user!.orgId);
 
   // 12-char URL-safe; ~9 bytes of entropy keeps it short but uncrackable
   const tempPassword = crypto.randomBytes(9).toString('base64url');

@@ -20,7 +20,9 @@ UI is what's left); R-03 + D-02 (`SessionScore` dimensions now exposed on sessio
 responses; one shared `subScores()` prefers them, heuristic only as fallback);
 R-04 (`reconcileStuckEvaluations` sweep at startup + every 10 min re-dispatches sessions left
 `PENDING` by a crash); R-15 (`DELETE /api/v1/admin/org` — slug-confirmed, cascades to every
-dependent row; the settings danger-zone now calls it and logs the user out).
+dependent row; the settings danger-zone now calls it and logs the user out);
+R-17 (`assertSeatAvailable` blocks user creation past `Organization.seats` in `admin.createUser`
+and `manager.addProjectMember`'s new-user branch — 403 `SEAT_LIMIT`; no migration, fields exist).
 
 ## Validation summary
 
@@ -77,17 +79,6 @@ cookie (set/read server-side, rotated on refresh) is the real fix.
 
 Evidence: `frontend/lib/auth.ts:28-44`, `frontend/lib/api.ts:18-30`.
 
-## Remaining frontend and product behavior findings
-
-### R-17 — Seat and plan limits are unenforced (P2, intent-dependent)
-
-Organization `seats` and `plan` metadata exists and is displayed, but user creation and
-project-membership flows do not enforce it. Either missing product logic or misleading dead
-data; enforcing it may need a migration.
-
-Evidence: `backend/prisma/schema.prisma`, `backend/src/controllers/admin.ts:25-45`,
-`backend/src/controllers/manager.ts:152-207`.
-
 ## Remaining duplication and repository hygiene
 
 ### D-01 — Auth/token behavior is duplicated across frontend modules (P2)
@@ -114,4 +105,4 @@ checked without exposing the value.
 1. All-time data loading (R-02).
 2. Refresh-token lifecycle and storage hardening (R-08, R-09).
 3. Decide on CLI exit semantics (R-01).
-4. Seat/plan enforcement (R-17); consolidate duplicated auth/provider logic (D-01, D-03).
+4. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).

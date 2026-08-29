@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getUserById, getSessions, getSessionById } from '../controllers/manager.js';
+import { getUserById, getSessions, getSessionById, addProjectMember } from '../controllers/manager.js';
 import { mockReq, mockRes } from './helpers/http.js';
 
 describe('getUserById', () => {
@@ -157,5 +157,65 @@ describe('getSessionById — project scoping', () => {
 
     expect((res.body as { id: string }).id).toBe('s1');
     expect(pmFind).not.toHaveBeenCalled();
+  });
+});
+
+describe('addProjectMember — seat enforcement (new user)', () => {
+  function req(seats: number, userCount: number, tx = vi.fn()) {
+    return mockReq({
+      params: { projectId: 'p1' },
+      body: { name: 'Dev', email: 'dev@acme.com' },
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: {
+        project: {
+          findFirst: vi.fn().mockResolvedValue({ id: 'p1', orgId: 'org-acme', members: [{ userId: 'mgr-1' }] }),
+        },
+        user: {
+          findUnique: vi.fn().mockResolvedValue(null), // no existing org user -> fresh-user branch
+          count: vi.fn().mockResolvedValue(userCount),
+        },
+        organization: { findUnique: vi.fn().mockResolvedValue({ seats }) },
+        $transaction: tx,
+      },
+    });
+  }
+
+  it('403s when the org is at its seat limit', async () => {
+    const tx = vi.fn();
+    await expect(addProjectMember(req(5, 5, tx), mockRes())).rejects.toMatchObject({ statusCode: 403 });
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('proceeds to create when a seat is free', async () => {
+    const tx = vi.fn().mockResolvedValue({ id: 'u9', name: 'Dev', email: 'dev@acme.com', role: 'DEVELOPER' });
+    const res = mockRes();
+    await addProjectMember(req(5, 4, tx), res);
+    expect(tx).toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('does NOT seat-check when adding an existing org member', async () => {
+    const count = vi.fn().mockResolvedValue(5); // at limit, but must be ignored
+    const r = mockReq({
+      params: { projectId: 'p1' },
+      body: { name: 'Dev', email: 'dev@acme.com' },
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: {
+        project: { findFirst: vi.fn().mockResolvedValue({ id: 'p1', orgId: 'org-acme', members: [{ userId: 'mgr-1' }] }) },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'u-existing', name: 'Dev', email: 'dev@acme.com', role: 'DEVELOPER' }),
+          count,
+        },
+        organization: { findUnique: vi.fn().mockResolvedValue({ seats: 5 }) },
+        projectMember: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({}),
+        },
+      },
+    });
+    const res = mockRes();
+    await addProjectMember(r, res);
+    expect(res.statusCode).toBe(201);
+    expect(count).not.toHaveBeenCalled();
   });
 });
