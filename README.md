@@ -77,9 +77,17 @@ Requires Node ≥ 20 and `npm`.
 ```bash
 cd frontend
 npm install
-echo 'NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1' > .env.local
 npm run dev                          # http://localhost:3000
 ```
+
+`next.config.ts` rewrites `/api/v1/*` to the backend (`API_PROXY_TARGET`, default
+`http://localhost:3001`), so the browser talks to the API **same-origin** — that is what lets
+the backend own the HttpOnly `SameSite=Lax` `ds_refresh` cookie. This is the supported
+deployment shape: in production point `API_PROXY_TARGET` at the backend origin and leave
+`NEXT_PUBLIC_API_URL` unset. Setting `NEXT_PUBLIC_API_URL` to a backend on a **different host**
+makes the browser call it cross-site, and the refresh cookie is then never sent — sessions
+silently drop every ~15 min. (A different port on `localhost` is same-site, so it's fine for
+local dev.)
 
 ### 3. CLI (`cli/`)
 

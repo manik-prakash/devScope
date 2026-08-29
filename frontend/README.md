@@ -13,14 +13,24 @@ npm run dev        # http://localhost:3000
 
 The backend must be running separately (`http://localhost:3001` by default).
 `next.config.ts` rewrites `/api/v1/*` to it, so the browser talks to the API
-same-origin (this is what lets the backend keep an HttpOnly refresh cookie).
+same-origin — this is what lets the backend keep an HttpOnly `SameSite=Lax`
+refresh cookie. **This same-origin rewrite is the supported deployment shape**;
+in production set `API_PROXY_TARGET` to the backend origin and leave
+`NEXT_PUBLIC_API_URL` unset.
 
 Optional `frontend/.env.local`:
 
 ```
 API_PROXY_TARGET=http://localhost:3001      # backend origin the rewrite points at
-NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1   # only to bypass the rewrite
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1   # bypass the rewrite — see caveat
 ```
+
+`NEXT_PUBLIC_API_URL` makes the browser call the backend directly. Only safe when it
+resolves to the **same site** as the app (e.g. another port on `localhost`). Pointing it at a
+different host makes the auth calls cross-site, so the `SameSite=Lax` `ds_refresh` cookie is
+never sent and silent-refresh fails (~15-min forced re-login). Cross-host deployments would
+need the cookie relaxed to `SameSite=None; Secure` (not currently wired — a
+`CROSS_SITE_COOKIES` backend flag is the intended follow-up).
 
 ## Scripts
 

@@ -1,14 +1,14 @@
-# DevScope Audit Findings
+# DevScope Audit Findings — all resolved
 
-Audit date: 2026-08-29 (round 5) · round 6 follow-ups opened 2026-08-30
+Audit date: 2026-08-29 (round 5) · round 6 follow-ups 2026-08-30
 Scope: correctness, security, reliability, duplication, and repository-hygiene findings.
 
-Rounds 1–5 are fully closed (history below). **Round 6** tracks 7 follow-up findings from a
-review of the round-5 work — mostly concurrency races and two incomplete polish passes.
-Item IDs (R-nn / D-nn from the original report, F-n for round 6) are retained so earlier
-references still resolve — gaps are expected.
+**No findings remain open.** Rounds 1–5 and the round-6 follow-ups (a review of the round-5
+work — mostly concurrency races and two incomplete polish passes) are all closed. This file
+is kept as a record. Item IDs (R-nn / D-nn from the original report, F-n for round 6) are
+retained so earlier references still resolve — gaps are expected.
 
-## Round 6 — open
+## Round 6 — resolved
 
 - **F1 — CLI auth tests were not isolated.** `overrideConfigDir` ignored its temp-dir arg and
   wrote to (and deleted on cleanup) the real `~/.devscope`. **FIXED** — it now calls
@@ -42,7 +42,11 @@ references still resolve — gaps are expected.
   No migration — `evaluatedAt` doubles as the claim marker; nothing renders it for
   non-terminal rows.
 - **F7 — Cross-host `NEXT_PUBLIC_API_URL` breaks the refresh cookie** (`SameSite=Lax` won't
-  ride a cross-site XHR). Docs to steer deployments to the same-origin rewrite.
+  ride a cross-site XHR). **FIXED (docs).** `README.md` no longer tells fresh installs to set
+  `NEXT_PUBLIC_API_URL` (the rewrite already targets `localhost:3001`); both READMEs now state
+  the same-origin `API_PROXY_TARGET` rewrite is the supported shape and that a different-host
+  `NEXT_PUBLIC_API_URL` silently drops sessions every ~15 min. A `CROSS_SITE_COOKIES` backend
+  flag (`SameSite=None; Secure`) is noted as the follow-up if cross-host is ever needed.
 
 ---
 
@@ -86,8 +90,8 @@ post-agent telemetry failure is stderr-only and never changes that code).
 ## Validation summary
 
 - CLI: `go build`, `go vet`, `go test ./...` pass.
-- Backend: type-check, lint (0 warnings), 80 tests, build pass.
-- Frontend: TypeScript, 27 tests, lint (0 errors, 28 pre-existing `react-hooks/*` warnings),
+- Backend: type-check, lint (0 warnings), 85 tests, build pass.
+- Frontend: TypeScript, 30 tests, lint (0 errors, 28 pre-existing `react-hooks/*` warnings),
   and production build pass.
 - Tests remain primarily mocked/unit-level; there is no real database integration suite or
   browser end-to-end coverage.
