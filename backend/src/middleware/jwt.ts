@@ -30,7 +30,7 @@ export const requireJwt = (req: Request, res: Response, next: NextFunction) => {
     };
 
     next();
-  } catch (error) {
+  } catch {
     throw unauthorized('Invalid or expired token');
   }
 };

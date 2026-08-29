@@ -48,7 +48,9 @@ func ProbeVersion(agentCmd string) string {
 
 // FindLatestLogFile navigates conventional operating system structures looking for
 // specifically dropped json logs. BaseDir can be injected or resolved via os.UserHomeDir().
-func FindLatestLogFile(agentSlug string, baseDir string) string {
+// notBefore, when non-zero, excludes files last modified before it — so a stale
+// transcript from an earlier session is not mistaken for the current run.
+func FindLatestLogFile(agentSlug string, baseDir string, notBefore time.Time) string {
 	if baseDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -78,21 +80,32 @@ func FindLatestLogFile(agentSlug string, baseDir string) string {
 		if err != nil {
 			return nil // Skip entirely rather than block parsing
 		}
-		
+
 		if d.IsDir() {
 			return nil
 		}
 
-		if filepath.Ext(d.Name()) == ".jsonl" || filepath.Ext(d.Name()) == ".json" {
-			info, iErr := d.Info()
-			if iErr != nil {
-				return nil
-			}
-			
-			if info.ModTime().After(latestTime) {
-				latestTime = info.ModTime()
-				latestFile = path
-			}
+		if ext := filepath.Ext(d.Name()); ext != ".jsonl" && ext != ".json" {
+			return nil
+		}
+
+		// These live alongside real transcripts but are not session logs.
+		if isNonTranscriptPath(searchPath, path) {
+			return nil
+		}
+
+		info, iErr := d.Info()
+		if iErr != nil {
+			return nil
+		}
+
+		if !notBefore.IsZero() && info.ModTime().Before(notBefore) {
+			return nil // stale — from an earlier session, not this run
+		}
+
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestFile = path
 		}
 
 		return nil
@@ -103,4 +116,38 @@ func FindLatestLogFile(agentSlug string, baseDir string) string {
 	}
 
 	return latestFile
+}
+
+// nonTranscriptNames are config/state files agents keep next to their session
+// logs; picking one of these yields a session with zero messages.
+var nonTranscriptNames = map[string]bool{
+	"settings.json":     true,
+	".credentials.json": true,
+	"history.jsonl":     true,
+	"config.json":       true,
+}
+
+// nonTranscriptDirs are subtrees under ~/.claude / ~/.codex that never hold a
+// session transcript.
+var nonTranscriptDirs = map[string]bool{
+	"todos":           true,
+	"statsig":         true,
+	"shell-snapshots": true,
+	".git":            true,
+}
+
+func isNonTranscriptPath(root, path string) bool {
+	if nonTranscriptNames[filepath.Base(path)] {
+		return true
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	for _, seg := range strings.Split(rel, string(filepath.Separator)) {
+		if nonTranscriptDirs[seg] {
+			return true
+		}
+	}
+	return false
 }

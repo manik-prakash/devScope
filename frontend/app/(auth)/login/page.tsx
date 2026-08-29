@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import { persistAuthTokens, decodeJwt } from '@/lib/auth'
+import { safeInternalPath } from '@/lib/utils'
 import { Logo } from '@/components/shared'
 import { Field } from '@/components/auth/Field'
 import type { AuthTokens } from '@/lib/types'
@@ -56,9 +57,9 @@ function LoginForm() {
       const payload = decodeJwt(tokens.accessToken)
       const role    = payload?.role
 
-      // Honour ?next= param set by proxy, but only same-origin paths
-      const next = searchParams.get('next')
-      if (next?.startsWith('/')) {
+      // Honour ?next= param set by proxy, but only genuine same-origin paths
+      const next = safeInternalPath(searchParams.get('next'))
+      if (next) {
         router.push(next)
         return
       }

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { conflict, forbidden, notFound } from '../utils/errors.js';
 import { createProjectSchema, inviteEngineerSchema } from '../validators/manager.js';
+import { parsePageParams } from '../utils/pagination.js';
 
 export const getOrg = async (req: Request, res: Response) => {
   const org = await req.prisma.organization.findUnique({
@@ -215,13 +216,17 @@ export const addProjectMember = async (req: Request, res: Response) => {
 };
 
 export const getSessions = async (req: Request, res: Response) => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 20;
-  const skip = (page - 1) * limit;
+  const { page, limit, skip } = parsePageParams(req.query);
+
+  // Admins see every session in the org; managers only see sessions in projects
+  // they're a member of (mirrors getProjects).
+  const where: Prisma.SessionWhereInput = req.user!.role === 'ADMIN'
+    ? { orgId: req.user!.orgId }
+    : { orgId: req.user!.orgId, project: { members: { some: { userId: req.user!.userId } } } };
 
   const [sessions, total] = await Promise.all([
     req.prisma.session.findMany({
-      where: { orgId: req.user!.orgId },
+      where,
       orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
@@ -230,7 +235,7 @@ export const getSessions = async (req: Request, res: Response) => {
         project: { select: { name: true, slug: true } },
       }
     }),
-    req.prisma.session.count({ where: { orgId: req.user!.orgId } }),
+    req.prisma.session.count({ where }),
   ]);
 
   res.json({
@@ -258,6 +263,14 @@ export const getSessionById = async (req: Request, res: Response) => {
 
   if (!session || session.orgId !== req.user!.orgId) {
     throw notFound('Session');
+  }
+
+  // Managers may only open sessions in a project they belong to; admins may open any.
+  if (req.user!.role !== 'ADMIN') {
+    const member = await req.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId: session.projectId, userId: req.user!.userId } },
+    });
+    if (!member) throw notFound('Session');
   }
 
   res.json({

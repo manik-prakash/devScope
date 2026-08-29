@@ -6,6 +6,9 @@ import { type PrismaClient, type User } from '@prisma/client';
 import { env } from '../config/env.js';
 import { unauthorized, conflict } from '../utils/errors.js';
 import { loginSchema, refreshSchema, changePasswordSchema, registerSchema } from '../validators/auth.js';
+import { parseDuration } from '../utils/duration.js';
+
+const REFRESH_TTL_MS = parseDuration(env.REFRESH_EXPIRES_IN) ?? 7 * 24 * 60 * 60 * 1000;
 
 interface IssuedTokens {
   accessToken: string;
@@ -27,9 +30,7 @@ async function issueTokens(user: Pick<User, 'id' | 'orgId' | 'role'>, prisma: Pr
   const rawRefreshToken = crypto.randomBytes(40).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
 
-  const expiresAt = new Date();
-  const days = parseInt(env.REFRESH_EXPIRES_IN) || 7;
-  expiresAt.setDate(expiresAt.getDate() + days);
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS);
 
   await prisma.refreshToken.create({
     data: {

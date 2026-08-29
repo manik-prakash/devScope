@@ -12,7 +12,6 @@
 import type {
   HistoricalSession,
   IterationTrend,
-  PromptLengthTrend,
   ScoreTrajectory,
   TrendData,
 } from '../types.js';

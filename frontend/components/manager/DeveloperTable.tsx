@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { ScoreBadge } from '@/components/shared/ScoreBadge'
-import { average, initials, isWithinDays, formatRelativeTime } from '@/lib/utils'
+import { average, initials, isWithinDays, formatRelativeTime, roleLabel } from '@/lib/utils'
 import type { User, Session } from '@/lib/types'
 
 // ─── Per-user computed stats ──────────────────────────────────────────────────
@@ -37,17 +37,17 @@ function computeUserStats(userId: string, sessions: Session[]): UserStats {
 // ─── Role badge ───────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
-  const isManager = role === 'MANAGER'
+  const elevated = role === 'MANAGER' || role === 'ADMIN'
   return (
     <span
       className="rounded-full border px-2 py-0.5 text-xs font-medium"
       style={{
-        background:  isManager ? 'rgba(37,99,235,0.1)'   : 'var(--surface-2)',
-        color:       isManager ? '#93C5FD'                : 'var(--text-muted)',
-        borderColor: isManager ? 'rgba(37,99,235,0.2)'   : 'var(--border)',
+        background:  elevated ? 'rgba(37,99,235,0.1)'   : 'var(--surface-2)',
+        color:       elevated ? '#93C5FD'                : 'var(--text-muted)',
+        borderColor: elevated ? 'rgba(37,99,235,0.2)'   : 'var(--border)',
       }}
     >
-      {isManager ? 'Manager' : 'Developer'}
+      {roleLabel(role)}
     </span>
   )
 }

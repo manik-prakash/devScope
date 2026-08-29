@@ -16,6 +16,7 @@ import {
   formatRelativeTime,
   mode,
 } from '@/lib/utils'
+import { activeProjectId, ALL_PROJECTS_TAB } from '@/lib/queries/me'
 import type { Session } from '@/lib/types'
 
 // ─── Score trend (14 days) ────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ export function DeveloperDetail({ userId }: { userId: string }) {
   }, [userSessions])
 
   // Set default active project once projects are loaded
-  const currentProjectId = activeProject ?? projects[0]?.id ?? null
+  const currentProjectId = activeProjectId(activeProject, projects[0]?.id)
 
   // Sessions filtered to current project tab
   const tabSessions = useMemo(
@@ -238,10 +239,10 @@ export function DeveloperDetail({ userId }: { userId: string }) {
         <div className="flex flex-wrap gap-2">
           {/* "All" tab */}
           <button
-            onClick={() => setActiveProject(null)}
+            onClick={() => setActiveProject(ALL_PROJECTS_TAB)}
             className="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
             style={
-              currentProjectId === null
+              activeProject === ALL_PROJECTS_TAB
                 ? { background: 'var(--accent-dim)', borderColor: 'rgba(37,99,235,0.25)', color: 'var(--accent)' }
                 : { background: 'transparent', borderColor: 'var(--border)', color: 'var(--text-muted)' }
             }

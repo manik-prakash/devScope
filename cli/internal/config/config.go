@@ -166,6 +166,11 @@ func Save(cfg *Config) error {
 	if err := os.WriteFile(ConfigPath(), data, 0o600); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
+	// os.WriteFile only applies the mode when creating the file — tighten an
+	// existing one too, since it holds the API key and signing secret.
+	if err := os.Chmod(ConfigPath(), 0o600); err != nil {
+		return fmt.Errorf("failed to secure config permissions: %w", err)
+	}
 	return nil
 }
 
@@ -315,6 +320,18 @@ func ResolveProject(cfg *Config, flagSlug, repoSlug string) (*Project, error) {
 	}
 
 	return nil, projectNotFoundError(cfg)
+}
+
+// ResolveProjectForDir resolves the active project for a working directory,
+// loading that directory's .devscope.yaml so its `project:` field participates
+// in precedence (flag → repo file → global default). `run` and `status` use
+// this instead of passing an empty repo slug to ResolveProject.
+func ResolveProjectForDir(cfg *Config, flagSlug, dir string) (*Project, error) {
+	repoSlug := ""
+	if rc, err := LoadRepoConfig(dir); err == nil && rc != nil {
+		repoSlug = rc.Project
+	}
+	return ResolveProject(cfg, flagSlug, repoSlug)
 }
 
 // projectNotFoundError builds a human-readable error listing available projects.

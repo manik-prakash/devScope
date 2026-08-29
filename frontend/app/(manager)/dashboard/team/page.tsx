@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Search, Users, FolderOpen } from 'lucide-react'
+import { Search, Users, FolderOpen, AlertTriangle } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared'
 import { DeveloperTable } from '@/components/manager/DeveloperTable'
 import { useManagerUsers } from '@/lib/queries/users'
@@ -11,11 +11,12 @@ import { useManagerSessions } from '@/lib/queries/sessions'
 export default function TeamPage() {
   const [search, setSearch] = useState('')
 
-  const { data: users = [],    isLoading: usersLoading }   = useManagerUsers()
-  const { data: sessData,      isLoading: sessionsLoading } = useManagerSessions(1, 200)
+  const { data: users = [],    isLoading: usersLoading,    isError: usersError }   = useManagerUsers()
+  const { data: sessData,      isLoading: sessionsLoading, isError: sessionsError } = useManagerSessions(1, 200)
   const sessions = sessData?.sessions ?? []
 
   const isLoading = usersLoading || sessionsLoading
+  const isError = usersError || sessionsError
 
   return (
     <div className="space-y-6">
@@ -65,7 +66,13 @@ export default function TeamPage() {
         className="rounded border"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        {isLoading ? (
+        {isError ? (
+          <EmptyState
+            icon={AlertTriangle}
+            heading="Couldn’t load the team"
+            subtext="Something went wrong reaching the server. Refresh to try again."
+          />
+        ) : isLoading ? (
           <div className="space-y-px p-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div

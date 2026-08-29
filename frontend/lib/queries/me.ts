@@ -175,6 +175,18 @@ export interface ProjectTab {
   name: string
 }
 
+// Sentinel for the "All projects" tab. A plain `null` selection can't be told
+// apart from "no tab chosen yet", which is why the All button used to fall
+// straight back to the first project.
+export const ALL_PROJECTS_TAB = '__all__'
+
+// Resolve the active project-tab selection to a concrete project id (or null =
+// show every project).
+export function activeProjectId(tab: string | null, firstId: string | undefined): string | null {
+  if (tab === ALL_PROJECTS_TAB) return null
+  return tab ?? firstId ?? null
+}
+
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 export function useDevDashboard(projectId: string | null) {

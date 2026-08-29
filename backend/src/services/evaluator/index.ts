@@ -27,7 +27,6 @@ import { scoreDimensions } from './stages/score.js';
 import { analyzeTrends } from './stages/trends.js';
 import { synthesize } from './stages/synthesize.js';
 import type {
-  Anomaly,
   Confidence,
   HistoricalSession,
   PipelineInput,

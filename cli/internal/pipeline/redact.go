@@ -51,7 +51,9 @@ func RedactSession(sess *adapters.NormalizedSession, customPatterns []string) (*
 		}
 		rx, err := regexp.Compile(p)
 		if err != nil {
-			// Skip invalid custom regexes rather than fail the whole run.
+			// Skip invalid custom regexes rather than fail the whole run. The
+			// caller is expected to have surfaced these via InvalidPatterns so a
+			// typo'd rule doesn't silently ship a secret.
 			continue
 		}
 		patterns = append(patterns, rx)
@@ -83,6 +85,22 @@ func RedactSession(sess *adapters.NormalizedSession, customPatterns []string) (*
 	}
 
 	return &out, total, nil
+}
+
+// InvalidPatterns returns the entries of patterns that are not valid regular
+// expressions. RedactSession silently skips these; callers should surface them
+// so a typo in a `custom_strip_patterns` rule doesn't quietly ship a secret.
+func InvalidPatterns(patterns []string) []string {
+	var bad []string
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if _, err := regexp.Compile(p); err != nil {
+			bad = append(bad, p)
+		}
+	}
+	return bad
 }
 
 // redactField applies every pattern to s, replacing matches with the placeholder,

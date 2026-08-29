@@ -262,12 +262,11 @@ func TestGetRecentSessions_Success(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(RecentSessionsResponse{
-			Sessions: []RecentSession{
-				{SessionID: "s1", Agent: "claude-code", StartedAt: "2026-03-28T10:00:00Z", Score: 8.5, Status: "scored"},
-				{SessionID: "s2", Agent: "codex", StartedAt: "2026-03-27T14:00:00Z", Score: 0, Status: "queued"},
-			},
-		})
+		// s2 is unscored — the backend sends score: null.
+		w.Write([]byte(`{"sessions":[` +
+			`{"session_id":"s1","agent":"claude-code","started_at":"2026-03-28T10:00:00Z","score":8.5,"status":"scored"},` +
+			`{"session_id":"s2","agent":"codex","started_at":"2026-03-27T14:00:00Z","score":null,"status":"queued"}` +
+			`]}`))
 	}))
 	defer server.Close()
 
@@ -283,8 +282,11 @@ func TestGetRecentSessions_Success(t *testing.T) {
 	if result.Sessions[0].SessionID != "s1" {
 		t.Errorf("Sessions[0].SessionID: got %q", result.Sessions[0].SessionID)
 	}
-	if result.Sessions[0].Score != 8.5 {
-		t.Errorf("Sessions[0].Score: got %f", result.Sessions[0].Score)
+	if result.Sessions[0].Score == nil || *result.Sessions[0].Score != 8.5 {
+		t.Errorf("Sessions[0].Score: got %v, want 8.5", result.Sessions[0].Score)
+	}
+	if result.Sessions[1].Score != nil {
+		t.Errorf("Sessions[1].Score: got %v, want nil (unscored)", *result.Sessions[1].Score)
 	}
 }
 

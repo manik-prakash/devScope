@@ -26,8 +26,14 @@ export interface NormalizedStats {
 }
 
 function num(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? n : 0;
+  // Coerce real numbers and numeric strings only. `Number(true)` is 1 and
+  // `Number(null)` is 0 — never let those masquerade as a stat.
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 function stringArray(value: unknown): string[] {

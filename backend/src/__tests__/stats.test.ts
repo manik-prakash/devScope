@@ -60,4 +60,9 @@ describe('normalizeStats', () => {
       normalizeStats({ total_prompts: '4', file_types_touched: ['go', 3, null] }),
     ).toMatchObject({ totalPrompts: 4, fileTypesTouched: ['go'] });
   });
+
+  it('does not coerce booleans to numbers (true must not become 1)', () => {
+    expect(normalizeStats({ total_prompts: true, total_iterations: false }))
+      .toMatchObject({ totalPrompts: 0, totalIterations: 0 });
+  });
 });

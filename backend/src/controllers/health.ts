@@ -2,7 +2,6 @@ import { type Request, type Response } from 'express'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const { version } = require('../../package.json') as { version: string }
 
 export const getHealth = async (req: Request, res: Response) => {

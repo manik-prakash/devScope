@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getUserById } from '../controllers/manager.js';
+import { getUserById, getSessions, getSessionById } from '../controllers/manager.js';
 import { mockReq, mockRes } from './helpers/http.js';
 
 describe('getUserById', () => {
@@ -33,5 +33,107 @@ describe('getUserById', () => {
     });
 
     await expect(getUserById(req, mockRes())).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('getSessions — project scoping', () => {
+  const rows = [{ id: 's1', orgId: 'org-acme', projectId: 'p1', durationMs: 5n }];
+  const memberScoped = { orgId: 'org-acme', project: { members: { some: { userId: 'mgr-1' } } } };
+
+  it('restricts a manager to sessions in projects they belong to', async () => {
+    const findMany = vi.fn().mockResolvedValue(rows);
+    const count = vi.fn().mockResolvedValue(1);
+    const req = mockReq({
+      query: {},
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: { session: { findMany, count } },
+    });
+
+    await getSessions(req, mockRes());
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: memberScoped }));
+    expect(count).toHaveBeenCalledWith({ where: memberScoped });
+  });
+
+  it('clamps hostile pagination params (no negative skip, capped take)', async () => {
+    const findMany = vi.fn().mockResolvedValue(rows);
+    const count = vi.fn().mockResolvedValue(1);
+    const req = mockReq({
+      query: { page: '-3', limit: '99999' },
+      user: { userId: 'adm-1', orgId: 'org-acme', role: 'ADMIN' },
+      prisma: { session: { findMany, count } },
+    });
+
+    await getSessions(req, mockRes());
+
+    const args = findMany.mock.calls[0][0];
+    expect(args.skip).toBeGreaterThanOrEqual(0);
+    expect(args.take).toBeLessThanOrEqual(50);
+  });
+
+  it('lets an admin see every session in the org', async () => {
+    const findMany = vi.fn().mockResolvedValue(rows);
+    const count = vi.fn().mockResolvedValue(1);
+    const req = mockReq({
+      query: {},
+      user: { userId: 'adm-1', orgId: 'org-acme', role: 'ADMIN' },
+      prisma: { session: { findMany, count } },
+    });
+
+    await getSessions(req, mockRes());
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { orgId: 'org-acme' } }));
+    expect(count).toHaveBeenCalledWith({ where: { orgId: 'org-acme' } });
+  });
+});
+
+describe('getSessionById — project scoping', () => {
+  const session = { id: 's1', orgId: 'org-acme', projectId: 'p1', durationMs: 5n, user: {}, project: {} };
+
+  it('404s for a manager not a member of the session’s project', async () => {
+    const req = mockReq({
+      params: { sessionId: 's1' },
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: {
+        session: { findUnique: vi.fn().mockResolvedValue(session) },
+        projectMember: { findUnique: vi.fn().mockResolvedValue(null) },
+      },
+    });
+
+    await expect(getSessionById(req, mockRes())).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('returns the session for a manager who is a project member', async () => {
+    const req = mockReq({
+      params: { sessionId: 's1' },
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: {
+        session: { findUnique: vi.fn().mockResolvedValue(session) },
+        projectMember: { findUnique: vi.fn().mockResolvedValue({ projectId: 'p1', userId: 'mgr-1' }) },
+      },
+    });
+    const res = mockRes();
+
+    await getSessionById(req, res);
+
+    expect((res.body as { id: string }).id).toBe('s1');
+  });
+
+  it('returns the session for an admin without a membership check', async () => {
+    const pmFind = vi.fn().mockResolvedValue(null);
+    const req = mockReq({
+      params: { sessionId: 's1' },
+      user: { userId: 'adm-1', orgId: 'org-acme', role: 'ADMIN' },
+      prisma: {
+        session: { findUnique: vi.fn().mockResolvedValue(session) },
+        projectMember: { findUnique: pmFind },
+      },
+    });
+    const res = mockRes();
+
+    await getSessionById(req, res);
+
+    expect((res.body as { id: string }).id).toBe('s1');
+    expect(pmFind).not.toHaveBeenCalled();
   });
 });

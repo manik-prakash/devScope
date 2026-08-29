@@ -24,7 +24,37 @@ function readRefreshToken(): string | null {
 function clearTokens(): void {
   if (typeof window === 'undefined') return
   sessionStorage.removeItem('ds_access')
+  sessionStorage.removeItem('ds_user')
   document.cookie = 'ds_refresh=; Max-Age=0; path=/'
+  document.cookie = 'ds_role=; Max-Age=0; path=/'
+  document.cookie = 'ds_must_change=; Max-Age=0; path=/'
+}
+
+/**
+ * Persist everything a /auth/refresh response carries — not just the access
+ * token. `ds_user` lives in sessionStorage (gone on tab close) while the refresh
+ * cookie lasts 7 days, so a silent refresh that only saved the token left every
+ * returning user without a name until a full re-login. Cookie flags mirror
+ * lib/auth.ts (SameSite=Strict, Secure in production, ~1 day).
+ */
+export function applyRefreshedSession(data: RefreshResponse): void {
+  if (typeof window === 'undefined') return
+
+  writeAccessToken(data.accessToken)
+
+  if (data.user) {
+    sessionStorage.setItem(
+      'ds_user',
+      JSON.stringify({ name: data.user.name, email: data.user.email }),
+    )
+  }
+
+  if (data.mustChangePass !== undefined) {
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+    document.cookie = data.mustChangePass
+      ? `ds_must_change=1; path=/; max-age=86400; SameSite=Strict${secure}`
+      : 'ds_must_change=; Max-Age=0; path=/; SameSite=Strict'
+  }
 }
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
@@ -108,7 +138,7 @@ api.interceptors.response.use(
         { refreshToken },
       )
 
-      writeAccessToken(data.accessToken)
+      applyRefreshedSession(data)
       flushQueue(data.accessToken)
 
       if (!original.headers) original.headers = {}
