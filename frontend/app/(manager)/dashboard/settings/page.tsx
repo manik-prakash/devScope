@@ -15,7 +15,7 @@ import {
 } from '@/lib/queries/users'
 import { useManagerSessions } from '@/lib/queries/sessions'
 import { useManagerOrg } from '@/lib/queries/projects'
-import { getAccessToken, decodeJwt } from '@/lib/auth'
+import { getAccessToken, decodeJwt, clearAllTokens } from '@/lib/auth'
 import { formatRelativeTime, initials } from '@/lib/utils'
 import type { InvitedUserResult, User, UserRole } from '@/lib/types'
 
@@ -317,17 +317,29 @@ function ApiKeysTab() {
 
 function DangerTab() {
   const { data: org, isError: orgError } = useManagerOrg()
-  const [inputValue, setInputValue]   = useState('')
-  const [confirmed, setConfirmed]     = useState(false)
+  const [inputValue, setInputValue] = useState('')
+  const [deleting, setDeleting]     = useState(false)
+  const [deleteErr, setDeleteErr]   = useState<string | null>(null)
 
   const slugToMatch = org?.slug ?? ''
   const isMatch     = slugToMatch !== '' && inputValue === slugToMatch
 
-  function handleDelete() {
-    if (!isMatch) return
-    // TODO: DELETE /admin/org when backend adds endpoint
-    console.log('[STUB] Delete org:', org?.id)
-    setConfirmed(true)
+  async function handleDelete() {
+    if (!isMatch || deleting) return
+    setDeleting(true)
+    setDeleteErr(null)
+    try {
+      await api.delete('/admin/org', { data: { confirm: slugToMatch } })
+      // The org and every account under it are gone — drop the session and bounce.
+      clearAllTokens()
+      window.location.href = '/login'
+    } catch (err) {
+      setDeleteErr(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? 'Failed to delete the organisation. Try again.',
+      )
+      setDeleting(false)
+    }
   }
 
   if (orgError) {
@@ -337,16 +349,6 @@ function DangerTab() {
         heading="Couldn’t load organisation settings"
         subtext="Something went wrong reaching the server. Refresh to try again."
       />
-    )
-  }
-
-  if (confirmed) {
-    return (
-      <div className="rounded border px-6 py-10 text-center" style={{ borderColor: 'var(--border)' }}>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          Organisation deletion has been requested. (Stub — no actual deletion occurred.)
-        </p>
-      </div>
     )
   }
 
@@ -406,17 +408,21 @@ function DangerTab() {
               />
             </div>
 
+            {deleteErr && (
+              <p className="text-xs" style={{ color: 'var(--danger)' }}>{deleteErr}</p>
+            )}
+
             <button
               onClick={handleDelete}
-              disabled={!isMatch}
+              disabled={!isMatch || deleting}
               className="h-9 rounded px-4 text-sm font-medium text-white transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-30"
               style={{ background: 'var(--danger)' }}
               onMouseEnter={(e) => {
-                if (isMatch) e.currentTarget.style.background = '#B91C1C'
+                if (isMatch && !deleting) e.currentTarget.style.background = '#B91C1C'
               }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--danger)' }}
             >
-              Delete organisation
+              {deleting ? 'Deleting…' : 'Delete organisation'}
             </button>
           </div>
         </div>

@@ -19,7 +19,8 @@ D-03 partial (route-group providers consolidated into `app/providers.tsx` — pa
 UI is what's left); R-03 + D-02 (`SessionScore` dimensions now exposed on session list/detail
 responses; one shared `subScores()` prefers them, heuristic only as fallback);
 R-04 (`reconcileStuckEvaluations` sweep at startup + every 10 min re-dispatches sessions left
-`PENDING` by a crash).
+`PENDING` by a crash); R-15 (`DELETE /api/v1/admin/org` — slug-confirmed, cascades to every
+dependent row; the settings danger-zone now calls it and logs the user out).
 
 ## Validation summary
 
@@ -78,14 +79,6 @@ Evidence: `frontend/lib/auth.ts:28-44`, `frontend/lib/api.ts:18-30`.
 
 ## Remaining frontend and product behavior findings
 
-### R-15 — Organization deletion is a misleading destructive stub (P2)
-
-The settings UI reports that an organization-deletion request was made, but the handler only
-logs to the console and marks the flow confirmed. There is no backend deletion endpoint.
-Either implement `DELETE /admin/org` (with a cascade decision) or remove the UI.
-
-Evidence: `frontend/app/(manager)/dashboard/settings/page.tsx:318-329`.
-
 ### R-17 — Seat and plan limits are unenforced (P2, intent-dependent)
 
 Organization `seats` and `plan` metadata exists and is displayed, but user creation and
@@ -120,5 +113,5 @@ checked without exposing the value.
 
 1. All-time data loading (R-02).
 2. Refresh-token lifecycle and storage hardening (R-08, R-09).
-3. Decide on the org-delete flow (R-15) and CLI exit semantics (R-01).
+3. Decide on CLI exit semantics (R-01).
 4. Seat/plan enforcement (R-17); consolidate duplicated auth/provider logic (D-01, D-03).

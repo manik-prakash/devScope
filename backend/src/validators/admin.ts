@@ -5,3 +5,8 @@ export const inviteManagerSchema = z.object({
   email: z.string().email(),
   role:  z.enum(['MANAGER']),
 });
+
+export const deleteOrgSchema = z.object({
+  // Must equal the org slug — a typed confirmation for an irreversible action.
+  confirm: z.string().min(1),
+});

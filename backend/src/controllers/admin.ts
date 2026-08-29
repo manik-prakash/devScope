@@ -2,8 +2,8 @@ import { type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
-import { conflict, forbidden, notFound } from '../utils/errors.js';
-import { inviteManagerSchema } from '../validators/admin.js';
+import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
+import { inviteManagerSchema, deleteOrgSchema } from '../validators/admin.js';
 
 export const getUsers = async (req: Request, res: Response) => {
   const users = await req.prisma.user.findMany({
@@ -72,6 +72,27 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 
   await req.prisma.user.delete({ where: { id: targetId } });
+
+  res.status(204).end();
+};
+
+// DELETE /api/v1/admin/org — irreversible. Requires the caller to echo the org
+// slug in the body. All dependent rows (users, projects, api keys, sessions,
+// scores, refresh tokens, memberships) cascade at the DB level.
+export const deleteOrg = async (req: Request, res: Response) => {
+  const { confirm } = deleteOrgSchema.parse(req.body);
+
+  const org = await req.prisma.organization.findUnique({
+    where: { id: req.user!.orgId },
+    select: { id: true, slug: true },
+  });
+  if (!org) throw notFound('Organization');
+
+  if (confirm !== org.slug) {
+    throw badRequest('Confirmation text does not match the organization slug', 'CONFIRM_MISMATCH');
+  }
+
+  await req.prisma.organization.delete({ where: { id: org.id } });
 
   res.status(204).end();
 };

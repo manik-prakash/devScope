@@ -11,5 +11,6 @@ router.use(requireRole('ADMIN'));
 router.get('/users', adminController.getUsers);
 router.post('/users', adminController.createUser);
 router.delete('/users/:userId', adminController.deleteUser);
+router.delete('/org', adminController.deleteOrg);
 
 export default router;
