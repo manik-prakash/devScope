@@ -17,7 +17,9 @@ URL-embedded credentials), R-16 (unsupported agent now exits non-zero), D-04 doc
 **Fixed in round 5 (in progress):** R-14 (error-state coverage complete);
 D-03 partial (route-group providers consolidated into `app/providers.tsx` — pagination/filter
 UI is what's left); R-03 + D-02 (`SessionScore` dimensions now exposed on session list/detail
-responses; one shared `subScores()` prefers them, heuristic only as fallback).
+responses; one shared `subScores()` prefers them, heuristic only as fallback);
+R-04 (`reconcileStuckEvaluations` sweep at startup + every 10 min re-dispatches sessions left
+`PENDING` by a crash).
 
 ## Validation summary
 
@@ -54,15 +56,6 @@ server-side aggregation / cursor-paginated endpoints; an interim is honest "late
 Evidence: `frontend/app/(developer)/me/sessions/page.tsx`,
 `frontend/app/(manager)/dashboard/sessions/page.tsx`,
 `frontend/app/(manager)/dashboard/page.tsx`, `frontend/lib/queries/me.ts`.
-
-### R-04 — Evaluation is fire-and-forget with no recovery mechanism (P1)
-
-The API persists a session, returns 202, and starts evaluation without durable job state. A
-process crash after insertion can leave a session permanently `PENDING`; there is no worker,
-retry queue, or reconciliation scan.
-
-Evidence: `backend/src/controllers/cli.ts` (post-insert dispatch), evaluator status fields in
-`backend/prisma/schema.prisma:187-208`.
 
 ## Remaining authentication and security findings
 
@@ -125,7 +118,7 @@ checked without exposing the value.
 
 ## Recommended remaining order
 
-1. All-time data loading (R-02), durable evaluation recovery (R-04).
+1. All-time data loading (R-02).
 2. Refresh-token lifecycle and storage hardening (R-08, R-09).
 3. Decide on the org-delete flow (R-15) and CLI exit semantics (R-01).
 4. Seat/plan enforcement (R-17); consolidate duplicated auth/provider logic (D-01, D-03).

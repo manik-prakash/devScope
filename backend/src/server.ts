@@ -16,6 +16,11 @@ import { createApp } from './app.js'
 import { prisma } from './config/prisma.js'
 import { logger } from './config/logger.js'
 import { env } from './config/env.js'
+import { reconcileStuckEvaluations } from './services/evaluator/reconcile.js'
+
+// How often to sweep for sessions whose evaluation never finished (a crash
+// between the 202 and the SessionScore write).
+const RECONCILE_INTERVAL_MS = 10 * 60_000
 
 // Last-resort safety net. With express-async-errors in place, handler rejections
 // are routed to the error middleware; anything that still reaches here is a bug
@@ -48,9 +53,21 @@ async function main() {
     )
   })
 
+  // ── Durable evaluation recovery ─────────────────────────────────────
+  // Re-dispatch any session left stuck in PENDING by a crash/restart, then
+  // keep sweeping. `unref()` so the timer never blocks shutdown.
+  const runReconcile = () =>
+    void reconcileStuckEvaluations(prisma).catch((err) =>
+      logger.error({ err }, 'reconcile sweep failed'),
+    )
+  runReconcile()
+  const reconcileTimer = setInterval(runReconcile, RECONCILE_INTERVAL_MS)
+  reconcileTimer.unref()
+
   // ── Graceful shutdown ────────────────────────────────────────────────
   async function shutdown(signal: string) {
     logger.info({ signal }, 'Shutdown signal received')
+    clearInterval(reconcileTimer)
 
     server.close(async () => {
       logger.info('HTTP server closed')
