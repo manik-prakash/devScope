@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, TrendingUp, TrendingDown, Minus, Activity, UserPlus, Check } from 'lucide-react'
-import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer, Pagination } from '@/components/shared'
 import { SessionVolumeChart } from '@/components/charts'
 import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
@@ -19,6 +19,7 @@ import {
   formatDuration,
   formatRelativeTime,
   initials,
+  paginate,
 } from '@/lib/utils'
 import type { Session, InvitedUserResult, ProjectMember } from '@/lib/types'
 
@@ -163,8 +164,6 @@ function Leaderboard({ entries }: { entries: DevStats[] }) {
 
 // ─── Session feed ─────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20
-
 interface SessionFeedProps {
   sessions:        Session[]
   onSelectSession: (id: string) => void
@@ -172,9 +171,7 @@ interface SessionFeedProps {
 
 function SessionFeed({ sessions, onSelectSession }: SessionFeedProps) {
   const [page, setPage] = useState(1)
-  const total      = sessions.length
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const visible    = sessions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const { totalPages, safePage, visible } = paginate(sessions, page)
   const COL        = 'px-4 py-3 text-sm'
 
   if (!sessions.length) {
@@ -235,35 +232,12 @@ function SessionFeed({ sessions, onSelectSession }: SessionFeedProps) {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          className="flex items-center justify-between border-t px-4 py-3"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={safePage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        className="flex items-center justify-between border-t px-4 py-3"
+      />
     </div>
   )
 }

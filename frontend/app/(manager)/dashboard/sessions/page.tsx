@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { Download, Activity, AlertTriangle } from 'lucide-react'
-import { PageHeader, EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { PageHeader, EmptyState, SessionDetailDrawer, Pagination, FilterSelect } from '@/components/shared'
 import { SessionsTable } from '@/components/manager/SessionsTable'
 import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
-import { isWithinDays } from '@/lib/utils'
+import { isWithinDays, paginate } from '@/lib/utils'
 import type { Session } from '@/lib/types'
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
@@ -56,40 +56,6 @@ const DATE_RANGE_OPTIONS: { label: string; value: DateRange }[] = [
   { label: 'All loaded',   value: 'all' },
 ]
 
-// ─── Filter select ────────────────────────────────────────────────────────────
-
-interface FilterSelectProps {
-  value:    string
-  onChange: (v: string) => void
-  options:  { label: string; value: string }[]
-  placeholder?: string
-}
-
-function FilterSelect({ value, onChange, options, placeholder = 'All' }: FilterSelectProps) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-9 rounded border px-3 text-sm outline-none transition-colors duration-150 cursor-pointer"
-      style={{
-        background:  'var(--surface)',
-        borderColor: 'var(--border)',
-        color:       value ? 'var(--text)' : 'var(--text-muted)',
-        minWidth:    '140px',
-      }}
-      onFocus={(e)  => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-      onBlur={(e)   => { e.currentTarget.style.borderColor = 'var(--border)' }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  )
-}
-
 // ─── Score range input ────────────────────────────────────────────────────────
 
 interface ScoreInputProps {
@@ -119,9 +85,6 @@ function ScoreInput({ value, onChange, placeholder }: ScoreInputProps) {
   )
 }
 
-// ─── Page constants ───────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 20
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -196,9 +159,7 @@ export default function SessionsPage() {
   // Reset to page 1 when filters change — handled by key deps above
 
   // ── Client-side pagination ────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage   = Math.min(page, totalPages)
-  const visible    = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const { totalPages, safePage, visible } = paginate(filtered, page)
 
   function handleFilterChange(setter: (v: string) => void) {
     return (v: string) => {
@@ -346,48 +307,14 @@ export default function SessionsPage() {
           <>
             <SessionsTable sessions={visible} onSelectSession={setSelectedSessionId} />
 
-            {/* ── Pagination ── */}
-            {totalPages > 1 && (
-              <div
-                className="flex items-center justify-between border-t px-4 py-3"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                  Page {safePage} of {totalPages}
-                  <span className="ml-2">·</span>
-                  <span className="ml-2 font-mono">{filtered.length}</span>
-                  <span className="ml-1">results</span>
-                </span>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage === 1}
-                    className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-                    onMouseEnter={(e) => {
-                      if (safePage > 1) e.currentTarget.style.background = 'var(--surface-2)'
-                    }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    Previous
-                  </button>
-
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage === totalPages}
-                    className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-                    onMouseEnter={(e) => {
-                      if (safePage < totalPages) e.currentTarget.style.background = 'var(--surface-2)'
-                    }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={filtered.length}
+              totalLabel="results"
+              onPageChange={setPage}
+              className="flex items-center justify-between border-t px-4 py-3"
+            />
           </>
         )}
       </div>

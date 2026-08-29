@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"github.com/manik-prakash/devscope-cli/cmd"
@@ -17,6 +18,9 @@ func main() {
 	cmd.SetVersion(version)
 
 	if err := cmd.Execute(); err != nil {
+		if ee, ok := errors.AsType[*cmd.ExitError](err); ok {
+			os.Exit(ee.Code)
+		}
 		os.Exit(1)
 	}
 }

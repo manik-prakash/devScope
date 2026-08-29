@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { Activity, AlertTriangle } from 'lucide-react'
-import { EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { EmptyState, SessionDetailDrawer, Pagination, FilterSelect } from '@/components/shared'
 import { SessionCard } from '@/components/developer/SessionCard'
 import { useDeveloperSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
-import { isWithinDays } from '@/lib/utils'
+import { isWithinDays, paginate } from '@/lib/utils'
 
 // ─── Filter helpers ───────────────────────────────────────────────────────────
 
@@ -15,85 +15,6 @@ const DATE_OPTIONS = [
   { label: 'Last 90 days', value: '90'  },
   { label: 'All loaded',   value: 'all' },
 ]
-
-interface FilterSelectProps {
-  value:       string
-  onChange:    (v: string) => void
-  options:     { label: string; value: string }[]
-  placeholder: string
-}
-
-function FilterSelect({ value, onChange, options, placeholder }: FilterSelectProps) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-9 rounded border px-3 text-sm outline-none transition-colors duration-150 cursor-pointer"
-      style={{
-        background:  'var(--surface)',
-        borderColor: 'var(--border)',
-        color:       value ? 'var(--text)' : 'var(--text-muted)',
-        minWidth:    '130px',
-      }}
-      onFocus={(e)  => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-      onBlur={(e)   => { e.currentTarget.style.borderColor = 'var(--border)' }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-// ─── Pagination ───────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 20
-
-interface PaginationBarProps {
-  page:       number
-  totalPages: number
-  total:      number
-  onPrev:     () => void
-  onNext:     () => void
-}
-
-function PaginationBar({ page, totalPages, total, onPrev, onNext }: PaginationBarProps) {
-  if (totalPages <= 1) return null
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-        Page {page} of {totalPages}
-        <span className="mx-2">·</span>
-        <span className="font-mono">{total}</span> sessions
-      </span>
-      <div className="flex gap-2">
-        <button
-          onClick={onPrev}
-          disabled={page === 1}
-          className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-          onMouseEnter={(e) => { if (page > 1) e.currentTarget.style.background = 'var(--surface-2)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-        >
-          Previous
-        </button>
-        <button
-          onClick={onNext}
-          disabled={page === totalPages}
-          className="h-7 rounded border px-3 text-xs transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
-          onMouseEnter={(e) => { if (page < totalPages) e.currentTarget.style.background = 'var(--surface-2)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -140,9 +61,7 @@ export default function MySessionsPage() {
   }, [allSessions, dateRange, projectFilter, agentFilter])
 
   // ── Pagination ─────────────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage   = Math.min(page, totalPages)
-  const visible    = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const { totalPages, safePage, visible } = paginate(filtered, page)
 
   function handleFilterChange(setter: (v: string) => void) {
     return (v: string) => { setter(v); setPage(1) }
@@ -264,12 +183,11 @@ export default function MySessionsPage() {
             ))}
           </div>
 
-          <PaginationBar
+          <Pagination
             page={safePage}
             totalPages={totalPages}
             total={filtered.length}
-            onPrev={() => setPage((p) => Math.max(1, p - 1))}
-            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onPageChange={setPage}
           />
         </>
       )}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,6 +99,94 @@ func TestGetMe_ServerDown(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Could not reach") {
 		t.Errorf("error should mention connectivity: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------
+// Error classification (R-01): callers distinguish an actionable auth
+// failure from a transient backend outage via errors.Is.
+// -----------------------------------------------------------------------
+
+func TestGetMe_ErrorClassification(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc // nil → point at a closed server
+		want    error
+	}{
+		{
+			name:    "401 wraps ErrAuthRejected",
+			handler: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusUnauthorized) },
+			want:    ErrAuthRejected,
+		},
+		{
+			name:    "503 wraps ErrUnavailable",
+			handler: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) },
+			want:    ErrUnavailable,
+		},
+		{
+			name:    "429 wraps ErrUnavailable",
+			handler: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusTooManyRequests) },
+			want:    ErrUnavailable,
+		},
+		{
+			name:    "transport failure wraps ErrUnavailable",
+			handler: nil,
+			want:    ErrUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := "http://127.0.0.1:1"
+			if tt.handler != nil {
+				server := httptest.NewServer(tt.handler)
+				defer server.Close()
+				url = server.URL
+			}
+			_, err := NewClient(url, "key", "0.1.0").GetMe()
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("GetMe error = %v, want errors.Is(_, %v)", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetRecentSessions_ErrorClassification(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+		want    error
+	}{
+		{
+			name:    "401 wraps ErrAuthRejected",
+			handler: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusUnauthorized) },
+			want:    ErrAuthRejected,
+		},
+		{
+			name:    "500 wraps ErrUnavailable",
+			handler: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) },
+			want:    ErrUnavailable,
+		},
+		{
+			name:    "transport failure wraps ErrUnavailable",
+			handler: nil,
+			want:    ErrUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := "http://127.0.0.1:1"
+			if tt.handler != nil {
+				server := httptest.NewServer(tt.handler)
+				defer server.Close()
+				url = server.URL
+			}
+			_, err := NewClient(url, "key", "0.1.0").GetRecentSessions(5)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("GetRecentSessions error = %v, want errors.Is(_, %v)", err, tt.want)
+			}
+		})
 	}
 }
 

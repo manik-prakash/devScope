@@ -10,10 +10,23 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+)
+
+// Sentinel errors for R-01 exit-code classification. Callers use errors.Is to
+// tell an actionable failure (bad/rejected key) apart from a transient one
+// (backend unreachable or briefly erroring) and pick their exit code accordingly.
+var (
+	// ErrAuthRejected wraps a 401 from the backend — the API key is invalid or
+	// revoked. Actionable: sync/status surface this as a non-zero exit.
+	ErrAuthRejected = errors.New("api key rejected")
+	// ErrUnavailable wraps a transport failure or a transient backend status
+	// (429, 5xx). Soft: sync/status keep exit 0 since a later retry should work.
+	ErrUnavailable = errors.New("devscope backend unavailable")
 )
 
 // -----------------------------------------------------------------------
@@ -162,7 +175,7 @@ func (c *Client) GetMe() (*MeResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf(
 			"Could not reach DevScope at %s.\n"+
-				"Check your network connection and DEVSCOPE_API_BASE_URL.", c.baseURL)
+				"Check your network connection and DEVSCOPE_API_BASE_URL: %w", c.baseURL, ErrUnavailable)
 	}
 	defer resp.Body.Close()
 
@@ -285,7 +298,7 @@ func (c *Client) GetRecentSessions(limit int) (*RecentSessionsResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf(
 			"Could not reach DevScope at %s.\n"+
-				"Check your network connection and DEVSCOPE_API_BASE_URL.", c.baseURL)
+				"Check your network connection and DEVSCOPE_API_BASE_URL: %w", c.baseURL, ErrUnavailable)
 	}
 	defer resp.Body.Close()
 
@@ -316,17 +329,25 @@ func (c *Client) setHeaders(req *http.Request) {
 }
 
 // checkAuthError returns a human-readable error if the response is 401.
+// The error wraps ErrAuthRejected so callers can branch on it (R-01).
 func (c *Client) checkAuthError(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf(
-			"Your API key was rejected. Run \"devscope auth\" to re-authenticate.")
+			"Your API key was rejected. Run \"devscope auth\" to re-authenticate: %w",
+			ErrAuthRejected)
 	}
 	return nil
 }
 
-// unexpectedStatusError builds an error from a non-success response.
+// unexpectedStatusError builds an error from a non-success response. A 429 or
+// 5xx is transient, so it wraps ErrUnavailable; anything else is left bare and
+// treated by callers as a hard failure.
 func (c *Client) unexpectedStatusError(resp *http.Response) error {
 	msg := c.readErrorBody(resp)
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		return fmt.Errorf("DevScope returned a transient error (HTTP %d): %s: %w",
+			resp.StatusCode, msg, ErrUnavailable)
+	}
 	return fmt.Errorf("DevScope returned an unexpected response (HTTP %d): %s",
 		resp.StatusCode, msg)
 }

@@ -1,10 +1,68 @@
 package cmd
 
 import (
+	"errors"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/manik-prakash/devscope-cli/internal/config"
 )
+
+// TestHelperProcess is not a real test — it's the subprocess runAgent execs in
+// TestRunAgent. It exits with HELPER_EXIT_CODE when GO_WANT_HELPER_PROCESS=1.
+func TestHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+	code, _ := strconv.Atoi(os.Getenv("HELPER_EXIT_CODE"))
+	os.Exit(code)
+}
+
+func TestRunAgent(t *testing.T) {
+	t.Run("returns the wrapped process exit code, not an error", func(t *testing.T) {
+		t.Setenv("GO_WANT_HELPER_PROCESS", "1")
+		t.Setenv("HELPER_EXIT_CODE", "7")
+
+		code, err := runAgent(os.Args[0], []string{"-test.run=TestHelperProcess"})
+		if err != nil {
+			t.Fatalf("runAgent returned err = %v, want nil (a non-zero exit is not our error)", err)
+		}
+		if code != 7 {
+			t.Fatalf("runAgent code = %d, want 7", code)
+		}
+	})
+
+	t.Run("zero exit → (0, nil)", func(t *testing.T) {
+		t.Setenv("GO_WANT_HELPER_PROCESS", "1")
+		t.Setenv("HELPER_EXIT_CODE", "0")
+
+		code, err := runAgent(os.Args[0], []string{"-test.run=TestHelperProcess"})
+		if err != nil || code != 0 {
+			t.Fatalf("runAgent = (%d, %v), want (0, nil)", code, err)
+		}
+	})
+
+	t.Run("failure to start → error", func(t *testing.T) {
+		_, err := runAgent("devscope-no-such-binary-xyzzy", nil)
+		if err == nil {
+			t.Fatal("expected an error when the agent binary cannot be started")
+		}
+	})
+}
+
+func TestAgentResult(t *testing.T) {
+	if err := agentResult(0); err != nil {
+		t.Fatalf("agentResult(0) = %v, want nil", err)
+	}
+	ee, ok := errors.AsType[*ExitError](agentResult(7))
+	if !ok {
+		t.Fatal("agentResult(7) should be an *ExitError")
+	}
+	if ee.Code != 7 {
+		t.Fatalf("ExitError.Code = %d, want 7", ee.Code)
+	}
+}
 
 func TestResolveAgentInvocation(t *testing.T) {
 	t.Run("positional arg wins", func(t *testing.T) {

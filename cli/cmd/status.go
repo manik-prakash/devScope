@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,7 +65,10 @@ backend, count offline queues, and fetch your last 5 telemetry logs mathematical
 		recent, err := client.GetRecentSessions(5)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "devscope: could not fetch recent sessions: %v\n", err)
-			return nil
+			if errors.Is(err, api.ErrUnavailable) {
+				return nil // transient — don't fail scripts/CI over a network blip
+			}
+			return err // rejected key or structural failure — actionable, exit non-zero
 		}
 
 		if len(recent.Sessions) == 0 {

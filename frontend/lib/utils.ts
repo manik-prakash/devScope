@@ -151,6 +151,24 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+// ─── Client-side list pagination ─────────────────────────────────────────────
+
+export const SESSIONS_PAGE_SIZE = 20
+
+// One correct implementation for the session screens: derive total pages,
+// clamp the requested page into range (so a filter that shrinks the list can't
+// strand the view past the end), and return that page's slice.
+export function paginate<T>(
+  items: T[],
+  page: number,
+  pageSize: number = SESSIONS_PAGE_SIZE,
+): { totalPages: number; safePage: number; visible: T[] } {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage = clamp(Math.floor(page) || 1, 1, totalPages)
+  const start = (safePage - 1) * pageSize
+  return { totalPages, safePage, visible: items.slice(start, start + pageSize) }
+}
+
 // ─── Date window helpers ──────────────────────────────────────────────────────
 
 export function startOfDayN(daysAgo: number): Date {

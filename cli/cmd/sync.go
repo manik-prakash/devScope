@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -32,7 +33,10 @@ them structurally with immediate remote assignments.`,
 		meResp, err := client.GetMe()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\n❌ Sync failed:\n%v\n", err)
-			return nil // returning nil intentionally so it doesn't print Cobra usage
+			if errors.Is(err, api.ErrUnavailable) {
+				return nil // transient — don't fail scripts/CI over a network blip
+			}
+			return err // rejected key or structural failure — actionable, exit non-zero
 		}
 
 		// Mutate local configuration structurally

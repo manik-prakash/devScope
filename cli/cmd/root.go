@@ -9,6 +9,13 @@ import (
 // version holds the CLI version, set from main.go via SetVersion().
 var version = "dev"
 
+// ExitError carries an explicit process exit code from a RunE up to main().
+// Cobra collapses every returned error to exit 1; main() unwraps this type so
+// `devscope run <agent>` can exit with the wrapped agent's own code (R-01).
+type ExitError struct{ Code int }
+
+func (e *ExitError) Error() string { return fmt.Sprintf("exit code %d", e.Code) }
+
 // SetVersion sets the CLI version string. Called from main before Execute.
 func SetVersion(v string) {
 	version = v
