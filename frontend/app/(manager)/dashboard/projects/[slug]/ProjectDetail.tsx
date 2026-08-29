@@ -9,7 +9,7 @@ import { SessionVolumeChart } from '@/components/charts'
 import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
 import { useManagerProject, managerProjectQueryKey } from '@/lib/queries/projects'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { MANAGER_USERS_QUERY_KEY, ADMIN_USERS_QUERY_KEY } from '@/lib/queries/users'
 import {
   average,
@@ -278,7 +278,7 @@ export function ProjectDetail({ slug }: { slug: string }) {
   const [inlineSuccess, setInlineSuccess]         = useState<string | null>(null)
 
   const { data: project, isLoading: projLoading } = useManagerProject(slug)
-  const { data: sessData, isLoading: sessLoading } = useManagerSessions(1, 200)
+  const { data: sessData, isLoading: sessLoading } = useManagerSessions(1, AGGREGATE_LIMIT)
 
   const allSessions = sessData?.sessions ?? []
 

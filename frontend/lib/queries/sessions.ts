@@ -2,6 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { ManagerSessionsResponse, DeveloperSessionsResponse, Session } from '@/lib/types'
 
+/**
+ * One page is fetched and aggregated client-side for the dashboards (trend
+ * charts, "latest N" stats, CSV export). This is the ceiling the backend
+ * session-list endpoints allow; screens that use it must label their numbers as
+ * "the most recent N sessions", not "all-time".
+ */
+export const AGGREGATE_LIMIT = 500
+
 // ─── Manager ──────────────────────────────────────────────────────────────────
 
 export function useManagerSessions(page = 1, limit = 20) {

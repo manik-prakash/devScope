@@ -22,7 +22,11 @@ R-04 (`reconcileStuckEvaluations` sweep at startup + every 10 min re-dispatches 
 `PENDING` by a crash); R-15 (`DELETE /api/v1/admin/org` — slug-confirmed, cascades to every
 dependent row; the settings danger-zone now calls it and logs the user out);
 R-17 (`assertSeatAvailable` blocks user creation past `Organization.seats` in `admin.createUser`
-and `manager.addProjectMember`'s new-user branch — 403 `SEAT_LIMIT`; no migration, fields exist).
+and `manager.addProjectMember`'s new-user branch — 403 `SEAT_LIMIT`; no migration, fields exist);
+R-02 interim (session-list endpoints now allow a 500-row page via `SESSION_LIST_MAX_LIMIT`, a
+shared `AGGREGATE_LIMIT`, "All time" relabelled "All loaded", and every affected screen
+captions its numbers as "the most recent N sessions" — a real aggregation endpoint is still
+the long-term fix).
 
 ## Validation summary
 
@@ -48,17 +52,6 @@ unchanged — `CLAUDE.md` documents it as deliberate ("a failed sync/status stil
 "`main()` is the only non-zero exit path"). Changing it needs a product decision.
 
 Evidence: `cli/cmd/sync.go:32-36`, `cli/cmd/status.go:63-67`, `cli/cmd/run.go` shipping path.
-
-### R-02 — Frontend all-time views, statistics, and CSV export remain incomplete (P1)
-
-Several screens request only the newest 100 or 200 sessions, then filter, aggregate,
-paginate, or export locally. Older sessions stay invisible while the UI presents all-time
-counts, averages, charts, project lists, and CSV exports as complete. The real fix is
-server-side aggregation / cursor-paginated endpoints; an interim is honest "latest N" labels.
-
-Evidence: `frontend/app/(developer)/me/sessions/page.tsx`,
-`frontend/app/(manager)/dashboard/sessions/page.tsx`,
-`frontend/app/(manager)/dashboard/page.tsx`, `frontend/lib/queries/me.ts`.
 
 ## Remaining authentication and security findings
 
@@ -102,7 +95,7 @@ checked without exposing the value.
 
 ## Recommended remaining order
 
-1. All-time data loading (R-02).
-2. Refresh-token lifecycle and storage hardening (R-08, R-09).
-3. Decide on CLI exit semantics (R-01).
-4. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).
+1. Refresh-token lifecycle and storage hardening (R-08, R-09).
+2. Decide on CLI exit semantics (R-01).
+3. Consolidate duplicated auth logic (D-01) and the per-screen pagination/filter UI (D-03).
+4. `backend/.env` credential hygiene (D-05).

@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Download, Activity, AlertTriangle } from 'lucide-react'
 import { PageHeader, EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionsTable } from '@/components/manager/SessionsTable'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { isWithinDays } from '@/lib/utils'
 import type { Session } from '@/lib/types'
 
@@ -53,7 +53,7 @@ const DATE_RANGE_OPTIONS: { label: string; value: DateRange }[] = [
   { label: 'Last 7 days',  value: '7'   },
   { label: 'Last 30 days', value: '30'  },
   { label: 'Last 90 days', value: '90'  },
-  { label: 'All time',     value: 'all' },
+  { label: 'All loaded',   value: 'all' },
 ]
 
 // ─── Filter select ────────────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ const PAGE_SIZE = 20
 
 export default function SessionsPage() {
   // Data
-  const { data: sessData, isLoading, isError } = useManagerSessions(1, 200)
+  const { data: sessData, isLoading, isError } = useManagerSessions(1, AGGREGATE_LIMIT)
   const allSessions                   = sessData?.sessions ?? []
 
   // Drawer
@@ -243,6 +243,13 @@ export default function SessionsPage() {
           </button>
         }
       />
+
+      {!isLoading && allSessions.length >= AGGREGATE_LIMIT && (
+        <p className="-mt-3 text-xs" style={{ color: 'var(--text-faint)' }}>
+          Filters, counts and CSV export cover the {AGGREGATE_LIMIT.toLocaleString()} most
+          recent sessions, not the full history.
+        </p>
+      )}
 
       {/* ── Filter bar ── */}
       <div className="flex flex-wrap items-center gap-3">

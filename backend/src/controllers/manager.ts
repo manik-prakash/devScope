@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { conflict, forbidden, notFound } from '../utils/errors.js';
 import { createProjectSchema, inviteEngineerSchema } from '../validators/manager.js';
-import { parsePageParams } from '../utils/pagination.js';
+import { parsePageParams, SESSION_LIST_MAX_LIMIT } from '../utils/pagination.js';
 import { scoreDetailInclude } from '../utils/sessionSelect.js';
 import { assertSeatAvailable } from '../utils/seats.js';
 
@@ -221,7 +221,7 @@ export const addProjectMember = async (req: Request, res: Response) => {
 };
 
 export const getSessions = async (req: Request, res: Response) => {
-  const { page, limit, skip } = parsePageParams(req.query);
+  const { page, limit, skip } = parsePageParams(req.query, { maxLimit: SESSION_LIST_MAX_LIMIT });
 
   // Admins see every session in the org; managers only see sessions in projects
   // they're a member of (mirrors getProjects).

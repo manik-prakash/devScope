@@ -6,13 +6,13 @@ import { Search, Users, FolderOpen, AlertTriangle } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared'
 import { DeveloperTable } from '@/components/manager/DeveloperTable'
 import { useManagerUsers } from '@/lib/queries/users'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 
 export default function TeamPage() {
   const [search, setSearch] = useState('')
 
   const { data: users = [],    isLoading: usersLoading,    isError: usersError }   = useManagerUsers()
-  const { data: sessData,      isLoading: sessionsLoading, isError: sessionsError } = useManagerSessions(1, 200)
+  const { data: sessData,      isLoading: sessionsLoading, isError: sessionsError } = useManagerSessions(1, AGGREGATE_LIMIT)
   const sessions = sessData?.sessions ?? []
 
   const isLoading = usersLoading || sessionsLoading

@@ -2,7 +2,7 @@ import { type Request, type Response } from 'express';
 import crypto from 'crypto';
 import { notFound } from '../utils/errors.js';
 import { updateMeSchema } from '../validators/developer.js';
-import { parsePageParams } from '../utils/pagination.js';
+import { parsePageParams, SESSION_LIST_MAX_LIMIT } from '../utils/pagination.js';
 import { scoreDetailInclude } from '../utils/sessionSelect.js';
 
 export const updateMe = async (req: Request, res: Response) => {
@@ -18,7 +18,7 @@ export const updateMe = async (req: Request, res: Response) => {
 };
 
 export const getSessions = async (req: Request, res: Response) => {
-  const { page, limit, skip } = parsePageParams(req.query);
+  const { page, limit, skip } = parsePageParams(req.query, { maxLimit: SESSION_LIST_MAX_LIMIT });
 
   const [sessions, total] = await Promise.all([
     req.prisma.session.findMany({

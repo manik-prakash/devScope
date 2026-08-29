@@ -6,7 +6,7 @@ import { ChevronLeft, Activity } from 'lucide-react'
 import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { ScoreTrendChart } from '@/components/charts'
 import { useManagerUsers } from '@/lib/queries/users'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import {
   average,
   initials,
@@ -121,7 +121,7 @@ export function DeveloperDetail({ userId }: { userId: string }) {
   const [activeProject, setActiveProject]         = useState<string | null>(null)
 
   const { data: users = [],  isLoading: usersLoading }    = useManagerUsers()
-  const { data: sessData,    isLoading: sessionsLoading }  = useManagerSessions(1, 200)
+  const { data: sessData,    isLoading: sessionsLoading }  = useManagerSessions(1, AGGREGATE_LIMIT)
 
   const user     = users.find((u) => u.id === userId)
   const sessions = sessData?.sessions ?? []

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useDeveloperSessions } from './sessions'
+import { useDeveloperSessions, AGGREGATE_LIMIT } from './sessions'
 import {
   average,
   mode,
@@ -210,7 +210,7 @@ export function activeProjectId(tab: string | null, firstId: string | undefined)
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 export function useDevDashboard(projectId: string | null) {
-  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, 100)
+  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, AGGREGATE_LIMIT)
   const allSessions                   = sessData?.sessions ?? []
 
   // Distinct projects
@@ -259,5 +259,8 @@ export function useDevDashboard(projectId: string | null) {
   // Insights
   const insights  = useMemo(() => buildInsights(thisWeek, lastWeek), [thisWeek, lastWeek])
 
-  return { isLoading, isError, projects, filtered, thisWeek, stats, trendData, radarData, insights }
+  // The fetch is capped — older sessions aren't loaded. Screens surface this.
+  const truncated = allSessions.length >= AGGREGATE_LIMIT
+
+  return { isLoading, isError, truncated, projects, filtered, thisWeek, stats, trendData, radarData, insights }
 }

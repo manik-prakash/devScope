@@ -55,7 +55,7 @@ describe('getSessions — project scoping', () => {
     expect(count).toHaveBeenCalledWith({ where: memberScoped });
   });
 
-  it('clamps hostile pagination params (no negative skip, capped take)', async () => {
+  it('clamps hostile pagination params (no negative skip, take capped at the session-list max)', async () => {
     const findMany = vi.fn().mockResolvedValue(rows);
     const count = vi.fn().mockResolvedValue(1);
     const req = mockReq({
@@ -68,7 +68,7 @@ describe('getSessions — project scoping', () => {
 
     const args = findMany.mock.calls[0][0];
     expect(args.skip).toBeGreaterThanOrEqual(0);
-    expect(args.take).toBeLessThanOrEqual(50);
+    expect(args.take).toBe(500);
   });
 
   it('lets an admin see every session in the org', async () => {

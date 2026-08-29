@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Activity, AlertTriangle } from 'lucide-react'
 import { EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionCard } from '@/components/developer/SessionCard'
-import { useDeveloperSessions } from '@/lib/queries/sessions'
+import { useDeveloperSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { isWithinDays } from '@/lib/utils'
 
 // ─── Filter helpers ───────────────────────────────────────────────────────────
@@ -13,7 +13,7 @@ const DATE_OPTIONS = [
   { label: 'Last 7 days',  value: '7'   },
   { label: 'Last 30 days', value: '30'  },
   { label: 'Last 90 days', value: '90'  },
-  { label: 'All time',     value: 'all' },
+  { label: 'All loaded',   value: 'all' },
 ]
 
 interface FilterSelectProps {
@@ -106,7 +106,7 @@ export default function MySessionsPage() {
   const [agentFilter,   setAgent]   = useState('')
   const [page, setPage]             = useState(1)
 
-  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, 200)
+  const { data: sessData, isLoading, isError } = useDeveloperSessions(1, AGGREGATE_LIMIT)
   const allSessions                   = sessData?.sessions ?? []
 
   // ── Derive filter options ──────────────────────────────────────────────────
@@ -195,6 +195,11 @@ export default function MySessionsPage() {
             {filtered.length} session{filtered.length !== 1 ? 's' : ''}
             {hasFilters ? ' (filtered)' : ''}
           </p>
+          {allSessions.length >= AGGREGATE_LIMIT && (
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--text-faint)' }}>
+              Showing the {AGGREGATE_LIMIT.toLocaleString()} most recent — older sessions aren’t loaded.
+            </p>
+          )}
         </div>
       </div>
 

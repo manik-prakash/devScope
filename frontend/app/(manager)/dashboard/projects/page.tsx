@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { PageHeader, EmptyState } from '@/components/shared'
 import { ProjectCard } from '@/components/manager/ProjectCard'
 import { useManagerProjects, MANAGER_PROJECTS_QUERY_KEY } from '@/lib/queries/projects'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { isWithinDays, average } from '@/lib/utils'
 import api from '@/lib/api'
 import type { Project } from '@/lib/types'
@@ -192,7 +192,7 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false)
 
   const { data: projects = [], isLoading: projLoading, isError: projError } = useManagerProjects()
-  const { data: sessData }                               = useManagerSessions(1, 100)
+  const { data: sessData }                               = useManagerSessions(1, AGGREGATE_LIMIT)
   const allSessions                                      = sessData?.sessions ?? []
 
   // Per-project computed stats

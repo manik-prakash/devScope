@@ -13,7 +13,7 @@ import {
   ADMIN_USERS_QUERY_KEY,
   MANAGER_USERS_QUERY_KEY,
 } from '@/lib/queries/users'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { useManagerOrg } from '@/lib/queries/projects'
 import { getAccessToken, decodeJwt, clearAllTokens } from '@/lib/auth'
 import { formatRelativeTime, initials } from '@/lib/utils'
@@ -126,7 +126,7 @@ function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps)
   const usersLoading = isAdmin ? adminQuery.isLoading : managerQuery.isLoading
   const usersError   = isAdmin ? adminQuery.isError : managerQuery.isError
 
-  const { data: sessData } = useManagerSessions(1, 200)
+  const { data: sessData } = useManagerSessions(1, AGGREGATE_LIMIT)
   const sessions = sessData?.sessions ?? []
 
   async function handleRevoke(userId: string) {

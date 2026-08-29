@@ -75,7 +75,7 @@ export default function MyStatsPage() {
     }
   }, [])
 
-  const { isLoading, isError, projects, stats, trendData, radarData, insights } =
+  const { isLoading, isError, truncated, projects, stats, trendData, radarData, insights } =
     useDevDashboard(activeProject)
 
   // Set default project tab once loaded
@@ -110,6 +110,11 @@ export default function MyStatsPage() {
         <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
           Here&apos;s how your AI sessions are looking.
         </p>
+        {truncated && (
+          <p className="mt-1 text-xs" style={{ color: 'var(--text-faint)' }}>
+            Based on your most recent sessions — older history isn’t loaded here.
+          </p>
+        )}
       </div>
 
       {/* ── Project tab switcher ── */}

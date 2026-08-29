@@ -6,6 +6,11 @@
  * This clamps both — the same bounds `cli.ts` already applied — so `manager`,
  * `developer`, and `cli` controllers stay consistent.
  */
+// The dashboards fetch one large page and aggregate client-side (trend charts,
+// "latest N" stats, CSV export). Until there are real aggregation endpoints, the
+// session-list controllers allow a larger page so those views cover more history.
+export const SESSION_LIST_MAX_LIMIT = 500;
+
 export function parsePageParams(
   query: Record<string, unknown> | undefined,
   { defaultLimit = 20, maxLimit = 50 }: { defaultLimit?: number; maxLimit?: number } = {},

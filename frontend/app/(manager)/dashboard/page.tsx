@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Activity, AlertTriangle } from 'lucide-react'
 import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionVolumeChart, DeveloperBarChart } from '@/components/charts'
-import { useManagerSessions } from '@/lib/queries/sessions'
+import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { useManagerOrg } from '@/lib/queries/projects'
 import {
   formatDuration,
@@ -148,7 +148,7 @@ export default function DashboardPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
   // Fetch a larger slice for stat/chart computation, and the org record
-  const { data: statsData, isLoading: statsLoading, isError: statsError } = useManagerSessions(1, 100)
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useManagerSessions(1, AGGREGATE_LIMIT)
   const { data: tableData, isLoading: tableLoading, isError: tableError } = useManagerSessions(1, 10)
   const { data: org }                                 = useManagerOrg()
 
@@ -213,6 +213,12 @@ export default function DashboardPage() {
         title="Overview"
         subtitle={org ? org.name : undefined}
       />
+
+      {allSessions.length >= AGGREGATE_LIMIT && (
+        <p className="-mt-4 text-xs" style={{ color: 'var(--text-faint)' }}>
+          Stats and charts are based on the {AGGREGATE_LIMIT.toLocaleString()} most recent sessions.
+        </p>
+      )}
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
