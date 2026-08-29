@@ -18,9 +18,13 @@ references still resolve — gaps are expected.
   interactive `$transaction` whose revoke is conditional (`where: { tokenHash, revokedAt:
   null }`); `count === 0` means another request already rotated, and is handled exactly like
   token reuse (`revokeTokenFamily` + clear cookie + 401). Shared `revokeTokenFamily` helper.
-- **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counts users before
-  `user.create` with no lock; concurrent invites exceed `Organization.seats`. Needs a
-  `SELECT … FOR UPDATE` on the org row inside the check+create transaction.
+- **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counted users before
+  `user.create` with no lock; concurrent invites could exceed `Organization.seats`. **FIXED**
+  — `assertSeatAvailable(tx, orgId)` now takes a `SELECT id FROM organizations … FOR UPDATE`
+  row lock first and both callers (`admin.createUser`, `manager.addProjectMember` fresh-user
+  branch) run the check + `user.create` in one interactive `$transaction` (bcrypt stays
+  outside the lock). Unit tests assert the lock precedes the count; true race coverage needs
+  an integration DB (suite is mock-level).
 - **F4 — Aggregation-limit labelling still partial.** Project list/detail, developer detail,
   and settings compute from the capped 500-session fetch without a truncation notice.
 - **F5 — `isError` still not surfaced** on `useManagerProject` / `useManagerUsers` /

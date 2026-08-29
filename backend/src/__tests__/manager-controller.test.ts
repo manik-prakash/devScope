@@ -161,8 +161,18 @@ describe('getSessionById — project scoping', () => {
 });
 
 describe('addProjectMember — seat enforcement (new user)', () => {
-  function req(seats: number, userCount: number, tx = vi.fn()) {
-    return mockReq({
+  function build(seats: number, userCount: number) {
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(userCount);
+    const userCreate = vi.fn().mockResolvedValue({ id: 'u9', name: 'Dev', email: 'dev@acme.com', role: 'DEVELOPER' });
+    const tx = {
+      $queryRaw: queryRaw,
+      organization: { findUnique: vi.fn().mockResolvedValue({ seats }) },
+      user: { count, create: userCreate },
+      projectMember: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const $transaction = vi.fn().mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
+    const request = mockReq({
       params: { projectId: 'p1' },
       body: { name: 'Dev', email: 'dev@acme.com' },
       user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
@@ -170,28 +180,35 @@ describe('addProjectMember — seat enforcement (new user)', () => {
         project: {
           findFirst: vi.fn().mockResolvedValue({ id: 'p1', orgId: 'org-acme', members: [{ userId: 'mgr-1' }] }),
         },
-        user: {
-          findUnique: vi.fn().mockResolvedValue(null), // no existing org user -> fresh-user branch
-          count: vi.fn().mockResolvedValue(userCount),
-        },
-        organization: { findUnique: vi.fn().mockResolvedValue({ seats }) },
-        $transaction: tx,
+        user: { findUnique: vi.fn().mockResolvedValue(null) }, // no existing org user -> fresh-user branch
+        $transaction,
       },
     });
+    return { request, $transaction, queryRaw, count, userCreate };
   }
 
   it('403s when the org is at its seat limit', async () => {
-    const tx = vi.fn();
-    await expect(addProjectMember(req(5, 5, tx), mockRes())).rejects.toMatchObject({ statusCode: 403 });
-    expect(tx).not.toHaveBeenCalled();
+    const { request, userCreate } = build(5, 5);
+    await expect(addProjectMember(request, mockRes())).rejects.toMatchObject({ statusCode: 403 });
+    expect(userCreate).not.toHaveBeenCalled();
   });
 
   it('proceeds to create when a seat is free', async () => {
-    const tx = vi.fn().mockResolvedValue({ id: 'u9', name: 'Dev', email: 'dev@acme.com', role: 'DEVELOPER' });
+    const { request, $transaction } = build(5, 4);
     const res = mockRes();
-    await addProjectMember(req(5, 4, tx), res);
-    expect(tx).toHaveBeenCalled();
+    await addProjectMember(request, res);
+    expect($transaction).toHaveBeenCalled();
     expect(res.statusCode).toBe(201);
+  });
+
+  it('locks the org row (SELECT … FOR UPDATE) before counting seats', async () => {
+    const { request, queryRaw, count } = build(5, 4);
+    await addProjectMember(request, mockRes());
+
+    expect(queryRaw).toHaveBeenCalled();
+    const sql = (queryRaw.mock.calls[0][0] as string[]).join(' ');
+    expect(sql).toMatch(/for update/i);
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(count.mock.invocationCallOrder[0]);
   });
 
   it('does NOT seat-check when adding an existing org member', async () => {

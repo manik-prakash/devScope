@@ -179,15 +179,15 @@ export const addProjectMember = async (req: Request, res: Response) => {
     return;
   }
 
-  // Fresh user — consumes a seat, so enforce the org limit first.
-  await assertSeatAvailable(req.prisma, req.user!.orgId);
-
-  // Create with temp password + ProjectMember in one transaction
+  // Fresh user — consumes a seat. Hash before the transaction; the seat check
+  // (org row lock) + user.create must run together so concurrent invites can't
+  // both slip past the limit.
   const tempPassword = crypto.randomBytes(9).toString('base64url');
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   try {
     const created = await req.prisma.$transaction(async (tx) => {
+      await assertSeatAvailable(tx, req.user!.orgId);
       const user = await tx.user.create({
         data: {
           orgId: req.user!.orgId,

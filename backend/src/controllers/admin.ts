@@ -26,23 +26,25 @@ export const getUsers = async (req: Request, res: Response) => {
 export const createUser = async (req: Request, res: Response) => {
   const { name, email, role } = inviteManagerSchema.parse(req.body);
 
-  await assertSeatAvailable(req.prisma, req.user!.orgId);
-
-  // 12-char URL-safe; ~9 bytes of entropy keeps it short but uncrackable
+  // 12-char URL-safe; ~9 bytes of entropy keeps it short but uncrackable.
+  // Hash before the transaction so the org row lock isn't held during bcrypt.
   const tempPassword = crypto.randomBytes(9).toString('base64url');
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   try {
-    const user = await req.prisma.user.create({
-      data: {
-        orgId: req.user!.orgId,
-        email,
-        name,
-        role,
-        passwordHash,
-        mustChangePass: true,
-      },
-      select: { id: true, name: true, email: true, role: true },
+    const user = await req.prisma.$transaction(async (tx) => {
+      await assertSeatAvailable(tx, req.user!.orgId);
+      return tx.user.create({
+        data: {
+          orgId: req.user!.orgId,
+          email,
+          name,
+          role,
+          passwordHash,
+          mustChangePass: true,
+        },
+        select: { id: true, name: true, email: true, role: true },
+      });
     });
 
     res.status(201).json({ ...user, tempPassword });

@@ -44,28 +44,51 @@ describe('deleteOrg', () => {
 });
 
 describe('createUser — seat enforcement', () => {
-  function req(seats: number, userCount: number, create = vi.fn()) {
-    return mockReq({
+  function build(seats: number, userCount: number, create = vi.fn()) {
+    const queryRaw = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(userCount);
+    const tx = {
+      $queryRaw: queryRaw,
+      organization: { findUnique: vi.fn().mockResolvedValue({ seats }) },
+      user: { count, create },
+    };
+    const request = mockReq({
       body: { name: 'New Mgr', email: 'mgr@acme.com', role: 'MANAGER' },
       user: { userId: 'adm-1', orgId: 'org-acme', role: 'ADMIN' },
       prisma: {
-        organization: { findUnique: vi.fn().mockResolvedValue({ seats }) },
-        user: { count: vi.fn().mockResolvedValue(userCount), create },
+        $transaction: vi.fn().mockImplementation((cb: (t: unknown) => unknown) => cb(tx)),
       },
     });
+    return { request, queryRaw, count, create };
   }
 
   it('403s when the org is already at its seat limit', async () => {
-    const create = vi.fn();
-    await expect(createUser(req(5, 5, create), mockRes())).rejects.toMatchObject({ statusCode: 403 });
+    const { request, create } = build(5, 5);
+    await expect(createUser(request, mockRes())).rejects.toMatchObject({ statusCode: 403 });
     expect(create).not.toHaveBeenCalled();
   });
 
   it('creates the user when a seat is free', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'u9', name: 'New Mgr', email: 'mgr@acme.com', role: 'MANAGER' });
+    const { request, create } = build(
+      5, 4,
+      vi.fn().mockResolvedValue({ id: 'u9', name: 'New Mgr', email: 'mgr@acme.com', role: 'MANAGER' }),
+    );
     const res = mockRes();
-    await createUser(req(5, 4, create), res);
+    await createUser(request, res);
     expect(create).toHaveBeenCalled();
     expect(res.statusCode).toBe(201);
+  });
+
+  it('locks the org row (SELECT … FOR UPDATE) before counting seats', async () => {
+    const { request, queryRaw, count } = build(
+      5, 4,
+      vi.fn().mockResolvedValue({ id: 'u9', name: 'New Mgr', email: 'mgr@acme.com', role: 'MANAGER' }),
+    );
+    await createUser(request, mockRes());
+
+    expect(queryRaw).toHaveBeenCalled();
+    const sql = (queryRaw.mock.calls[0][0] as string[]).join(' ');
+    expect(sql).toMatch(/for update/i);
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(count.mock.invocationCallOrder[0]);
   });
 });
