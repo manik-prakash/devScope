@@ -15,7 +15,9 @@ payload size bounds), R-13 (redaction now covers OpenAI/OpenRouter, Slack, Googl
 URL-embedded credentials), R-16 (unsupported agent now exits non-zero), D-04 doc/lint items.
 
 **Fixed in round 5 (in progress):** R-14 (settings page + session detail drawer now render an
-error state on request failure — error-state coverage is complete).
+error state on request failure — error-state coverage is complete); D-03 partial (the two
+route-group providers now alias one shared `app/providers.tsx` — the pagination/filter-UI
+duplication is what remains under D-03).
 
 ## Validation summary
 
@@ -126,11 +128,12 @@ The same heuristic scoring lives in `frontend/lib/queries/me.ts:21-31` and
 `frontend/components/shared/SessionDetailDrawer.tsx:19-36`, separate from the backend's
 canonical evaluator model. Resolves naturally with R-03.
 
-### D-03 — Provider and pagination/filter UI remains repeated (P2)
+### D-03 — Pagination/filter UI remains repeated (P2)
 
-The `(manager)` and `(developer)` React Query providers are near-identical, and the session
-screens repeat filter/pagination components. (The backend page/limit parser was consolidated
-into `parsePageParams`; the frontend duplication is what's left.)
+The session screens repeat filter and pagination components (e.g. a `PaginationBar`
+reimplemented per screen with subtly different `safePage` handling). (The React Query
+providers were consolidated into `app/providers.tsx`; the backend page/limit parser into
+`parsePageParams`. The per-screen pagination/filter UI is what's left.)
 
 ### D-05 — Local secret hygiene requires follow-up (P1 if the credential is real)
 

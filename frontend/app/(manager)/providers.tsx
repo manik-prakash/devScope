@@ -1,29 +1,3 @@
-'use client'
-
-import { useState, type ReactNode } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-
-export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime:          30_000,
-            retry:              1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
-  )
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-      {process.env.NODE_ENV === 'development' && (
-        <ReactQueryDevtools initialIsOpen={false} />
-      )}
-    </QueryClientProvider>
-  )
-}
+// Thin alias — the real provider lives in app/providers.tsx (shared with the
+// (developer) group). Kept so app/(manager)/layout.tsx's import path is unchanged.
+export { AppProviders as Providers } from '../providers'
