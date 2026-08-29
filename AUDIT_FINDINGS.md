@@ -25,11 +25,14 @@ references still resolve — gaps are expected.
   branch) run the check + `user.create` in one interactive `$transaction` (bcrypt stays
   outside the lock). Unit tests assert the lock precedes the count; true race coverage needs
   an integration DB (suite is mock-level).
-- **F4 — Aggregation-limit labelling still partial.** Project list/detail, developer detail,
-  and settings compute from the capped 500-session fetch without a truncation notice.
-- **F5 — `isError` still not surfaced** on `useManagerProject` / `useManagerUsers` /
-  `useManagerSessions` in project detail, developer detail, and settings — failed fetches
-  render as empty/zero or "not found".
+- **F4 + F5 — Manager screens: truncation notices + `isError`.** **FIXED** (one commit). New
+  shared `<TruncationNotice shown limit noun? />` (renders only when `shown >= limit`) drops
+  into `projects/page`, `ProjectDetail`, `DeveloperDetail`, `settings/page`, and retro-fits
+  the two existing inline captions in `dashboard/sessions` + `me/sessions`. `isError` is now
+  consumed on every session/project/user query in those screens: a failed primary fetch
+  (`useManagerProject` / `useManagerUsers`) renders the standard `AlertTriangle` `EmptyState`
+  instead of "not found"; a failed `useManagerSessions` shows an inline warning in place of
+  the truncation notice so stats/charts no longer read as real zeros.
 - **F6 — Reconcile duplicates LLM work** across backend instances: separate instances select
   the same stale `PENDING` rows and each dispatch the pipeline. Needs an atomic claim.
 - **F7 — Cross-host `NEXT_PUBLIC_API_URL` breaks the refresh cookie** (`SameSite=Lax` won't

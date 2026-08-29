@@ -3,8 +3,8 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, TrendingUp, TrendingDown, Minus, Activity, UserPlus, Check } from 'lucide-react'
-import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer, Pagination } from '@/components/shared'
+import { ChevronLeft, TrendingUp, TrendingDown, Minus, Activity, UserPlus, Check, AlertTriangle } from 'lucide-react'
+import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer, Pagination, TruncationNotice } from '@/components/shared'
 import { SessionVolumeChart } from '@/components/charts'
 import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
@@ -251,8 +251,8 @@ export function ProjectDetail({ slug }: { slug: string }) {
   const [tempResult, setTempResult]               = useState<InvitedUserResult | null>(null)
   const [inlineSuccess, setInlineSuccess]         = useState<string | null>(null)
 
-  const { data: project, isLoading: projLoading } = useManagerProject(slug)
-  const { data: sessData, isLoading: sessLoading } = useManagerSessions(1, AGGREGATE_LIMIT)
+  const { data: project, isLoading: projLoading, isError: projError } = useManagerProject(slug)
+  const { data: sessData, isLoading: sessLoading, isError: sessError } = useManagerSessions(1, AGGREGATE_LIMIT)
 
   const allSessions = sessData?.sessions ?? []
 
@@ -273,6 +273,21 @@ export function ProjectDetail({ slug }: { slug: string }) {
 
   const volumeData  = useMemo(() => buildVolumeData(projectSessions), [projectSessions])
   const leaderboard = useMemo(() => buildLeaderboard(projectSessions), [projectSessions])
+
+  if (projError) {
+    return (
+      <div className="space-y-4">
+        <Link href="/dashboard/projects" className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <ChevronLeft size={13} /> Back to projects
+        </Link>
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load this project"
+          subtext="Something went wrong reaching the server. Refresh to try again."
+        />
+      </div>
+    )
+  }
 
   if (projLoading) {
     return (
@@ -345,6 +360,14 @@ export function ProjectDetail({ slug }: { slug: string }) {
           <Check size={14} />
           {inlineSuccess}
         </div>
+      )}
+
+      {sessError ? (
+        <p className="text-xs" style={{ color: 'var(--warning)' }}>
+          Couldn’t load session data — the stats, chart and leaderboard below may be incomplete.
+        </p>
+      ) : (
+        <TruncationNotice shown={allSessions.length} limit={AGGREGATE_LIMIT} />
       )}
 
       {/* Stat cards */}

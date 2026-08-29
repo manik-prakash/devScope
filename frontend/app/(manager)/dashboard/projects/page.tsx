@@ -7,7 +7,7 @@ import { FolderOpen, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { PageHeader, EmptyState } from '@/components/shared'
+import { PageHeader, EmptyState, TruncationNotice } from '@/components/shared'
 import { ProjectCard } from '@/components/manager/ProjectCard'
 import { useManagerProjects, MANAGER_PROJECTS_QUERY_KEY } from '@/lib/queries/projects'
 import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
@@ -192,7 +192,7 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false)
 
   const { data: projects = [], isLoading: projLoading, isError: projError } = useManagerProjects()
-  const { data: sessData }                               = useManagerSessions(1, AGGREGATE_LIMIT)
+  const { data: sessData, isError: sessError }           = useManagerSessions(1, AGGREGATE_LIMIT)
   const allSessions                                      = sessData?.sessions ?? []
 
   // Per-project computed stats
@@ -256,6 +256,14 @@ export default function ProjectsPage() {
           </button>
         }
       />
+
+      {sessError ? (
+        <p className="text-xs" style={{ color: 'var(--warning)' }}>
+          Couldn’t load session data — per-project activity and scores below may be incomplete.
+        </p>
+      ) : (
+        <TruncationNotice shown={allSessions.length} limit={AGGREGATE_LIMIT} />
+      )}
 
       {projects.length === 0 ? (
         <EmptyState

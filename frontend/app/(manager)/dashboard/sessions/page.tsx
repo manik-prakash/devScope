@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Download, Activity, AlertTriangle } from 'lucide-react'
-import { PageHeader, EmptyState, SessionDetailDrawer, Pagination, FilterSelect } from '@/components/shared'
+import { PageHeader, EmptyState, SessionDetailDrawer, Pagination, FilterSelect, TruncationNotice } from '@/components/shared'
 import { SessionsTable } from '@/components/manager/SessionsTable'
 import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { isWithinDays, paginate } from '@/lib/utils'
@@ -205,11 +205,13 @@ export default function SessionsPage() {
         }
       />
 
-      {!isLoading && allSessions.length >= AGGREGATE_LIMIT && (
-        <p className="-mt-3 text-xs" style={{ color: 'var(--text-faint)' }}>
-          Filters, counts and CSV export cover the {AGGREGATE_LIMIT.toLocaleString()} most
-          recent sessions, not the full history.
-        </p>
+      {!isLoading && (
+        <TruncationNotice
+          shown={allSessions.length}
+          limit={AGGREGATE_LIMIT}
+          noun="results"
+          className="-mt-3 text-xs"
+        />
       )}
 
       {/* ── Filter bar ── */}

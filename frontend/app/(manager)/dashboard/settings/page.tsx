@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Users, Key, AlertTriangle, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
-import { EmptyState } from '@/components/shared'
+import { EmptyState, TruncationNotice } from '@/components/shared'
 import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
 import {
@@ -126,7 +126,7 @@ function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps)
   const usersLoading = isAdmin ? adminQuery.isLoading : managerQuery.isLoading
   const usersError   = isAdmin ? adminQuery.isError : managerQuery.isError
 
-  const { data: sessData } = useManagerSessions(1, AGGREGATE_LIMIT)
+  const { data: sessData, isError: sessError } = useManagerSessions(1, AGGREGATE_LIMIT)
   const sessions = sessData?.sessions ?? []
 
   async function handleRevoke(userId: string) {
@@ -161,6 +161,17 @@ function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps)
           <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {users.length} member{users.length !== 1 ? 's' : ''} in your organisation
           </p>
+          {sessError ? (
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--warning)' }}>
+              Couldn’t load activity data — “Last active” may be missing.
+            </p>
+          ) : (
+            <TruncationNotice
+              shown={sessions.length}
+              limit={AGGREGATE_LIMIT}
+              className="mt-0.5 text-xs"
+            />
+          )}
         </div>
         {isAdmin && (
           <button

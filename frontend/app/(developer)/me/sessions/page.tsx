@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Activity, AlertTriangle } from 'lucide-react'
-import { EmptyState, SessionDetailDrawer, Pagination, FilterSelect } from '@/components/shared'
+import { EmptyState, SessionDetailDrawer, Pagination, FilterSelect, TruncationNotice } from '@/components/shared'
 import { SessionCard } from '@/components/developer/SessionCard'
 import { useDeveloperSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { isWithinDays, paginate } from '@/lib/utils'
@@ -114,11 +114,11 @@ export default function MySessionsPage() {
             {filtered.length} session{filtered.length !== 1 ? 's' : ''}
             {hasFilters ? ' (filtered)' : ''}
           </p>
-          {allSessions.length >= AGGREGATE_LIMIT && (
-            <p className="mt-0.5 text-xs" style={{ color: 'var(--text-faint)' }}>
-              Showing the {AGGREGATE_LIMIT.toLocaleString()} most recent — older sessions aren’t loaded.
-            </p>
-          )}
+          <TruncationNotice
+            shown={allSessions.length}
+            limit={AGGREGATE_LIMIT}
+            className="mt-0.5 text-xs"
+          />
         </div>
       </div>
 

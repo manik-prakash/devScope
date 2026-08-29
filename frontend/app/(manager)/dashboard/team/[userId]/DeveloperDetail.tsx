@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Activity } from 'lucide-react'
-import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { ChevronLeft, Activity, AlertTriangle } from 'lucide-react'
+import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer, TruncationNotice } from '@/components/shared'
 import { ScoreTrendChart } from '@/components/charts'
 import { useManagerUsers } from '@/lib/queries/users'
 import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
@@ -120,8 +120,8 @@ export function DeveloperDetail({ userId }: { userId: string }) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [activeProject, setActiveProject]         = useState<string | null>(null)
 
-  const { data: users = [],  isLoading: usersLoading }    = useManagerUsers()
-  const { data: sessData,    isLoading: sessionsLoading }  = useManagerSessions(1, AGGREGATE_LIMIT)
+  const { data: users = [],  isLoading: usersLoading, isError: usersError }   = useManagerUsers()
+  const { data: sessData,    isLoading: sessionsLoading, isError: sessError } = useManagerSessions(1, AGGREGATE_LIMIT)
 
   const user     = users.find((u) => u.id === userId)
   const sessions = sessData?.sessions ?? []
@@ -170,6 +170,21 @@ export function DeveloperDetail({ userId }: { userId: string }) {
   const trendData = useMemo(() => buildTrendData(tabSessions), [tabSessions])
 
   const isLoading = usersLoading || sessionsLoading
+
+  if (usersError) {
+    return (
+      <div className="space-y-4">
+        <Link href="/dashboard/team" className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <ChevronLeft size={13} /> Back to team
+        </Link>
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load this developer"
+          subtext="Something went wrong reaching the server. Refresh to try again."
+        />
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (
@@ -264,6 +279,14 @@ export function DeveloperDetail({ userId }: { userId: string }) {
             </button>
           ))}
         </div>
+      )}
+
+      {sessError ? (
+        <p className="text-xs" style={{ color: 'var(--warning)' }}>
+          Couldn’t load session data — the stats and trend below may be incomplete.
+        </p>
+      ) : (
+        <TruncationNotice shown={sessions.length} limit={AGGREGATE_LIMIT} />
       )}
 
       {/* Stat cards */}
