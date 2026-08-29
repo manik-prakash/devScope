@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/manik-prakash/devscope-cli/internal/api"
@@ -150,6 +151,18 @@ func TestAuthFlow_InvalidKey(t *testing.T) {
 	}
 }
 
+// TestAuthTestsAreIsolated guards that overrideConfigDir actually redirects the
+// config package at the caller's temp dir — otherwise the auth tests read and
+// (on cleanup) delete the developer's real ~/.devscope/config.yaml.
+func TestAuthTestsAreIsolated(t *testing.T) {
+	tmp := t.TempDir()
+	overrideConfigDir(t, tmp)
+
+	if !strings.HasPrefix(config.Dir(), tmp) {
+		t.Fatalf("config.Dir() = %q, want it under the test temp dir %q — auth tests are not isolated from the real ~/.devscope", config.Dir(), tmp)
+	}
+}
+
 // TestAuthFlow_NoBaseURL tests that missing DEVSCOPE_API_BASE_URL
 // gives an actionable error.
 func TestAuthFlow_NoBaseURL(t *testing.T) {
@@ -161,44 +174,13 @@ func TestAuthFlow_NoBaseURL(t *testing.T) {
 	}
 }
 
-// overrideConfigDir is a test helper that temporarily overrides the
-// config package's internal directory path. This is valid because
-// config_test.go in the config package does the same thing via
-// direct assignment to the unexported variable.
-//
-// Since we can't access unexported vars from another package, we
-// use config.Save with a known path and set the env to use a temp dir.
-// Instead, we'll write a small helper that uses os to create the
-// config in the right place.
+// overrideConfigDir points the config package at dir for the duration of the
+// test (restored on cleanup) and creates the dir structure there, so the auth
+// tests never read or write the developer's real ~/.devscope.
 func overrideConfigDir(t *testing.T, dir string) {
 	t.Helper()
-
-	// We override HOME so UserHomeDir returns our temp dir.
-	// The config package resolves ~/.devscope on init(), which has
-	// already run. We need to use a different approach: set the
-	// config file directly by ensuring Save/Load use the overridden path.
-	//
-	// The cleanest way: since config package exposes Dir() but the
-	// devScopeDir is set in init(), we'll create a symlink or just
-	// ensure tests work with the real home dir by creating the config
-	// in the location config.Dir() expects.
-	//
-	// For integration tests in the cmd package, we accept that we'll
-	// write to ~/.devscope/ temporarily and clean up.
-	//
-	// Actually, let's use a creative approach: we can override the
-	// HOME env var BEFORE config's init runs — but that ship has sailed.
-	// Instead, let's just verify the flow logic works end-to-end
-	// by directly calling the pieces and checking results.
-
-	// The pragmatic approach: create the config dir structure under
-	// the real config.Dir() and register cleanup.
+	t.Cleanup(config.SetDirForTest(dir))
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs failed: %v", err)
 	}
-
-	// Register cleanup to remove config after test.
-	t.Cleanup(func() {
-		config.Delete()
-	})
 }

@@ -1,11 +1,39 @@
-# DevScope Audit Findings — all resolved
+# DevScope Audit Findings
 
-Audit date: 2026-08-29 (revised through fix round 5)
+Audit date: 2026-08-29 (round 5) · round 6 follow-ups opened 2026-08-30
 Scope: correctness, security, reliability, duplication, and repository-hygiene findings.
 
-**As of round 5, no findings remain open.** This file is kept as a record of what was found
-and how each item was closed. Item IDs (R-nn / D-nn) are retained from the original report so
-earlier references still resolve — gaps are expected.
+Rounds 1–5 are fully closed (history below). **Round 6** tracks 7 follow-up findings from a
+review of the round-5 work — mostly concurrency races and two incomplete polish passes.
+Item IDs (R-nn / D-nn from the original report, F-n for round 6) are retained so earlier
+references still resolve — gaps are expected.
+
+## Round 6 — open
+
+- **F1 — CLI auth tests were not isolated.** `overrideConfigDir` ignored its temp-dir arg and
+  wrote to (and deleted on cleanup) the real `~/.devscope`. **FIXED** — it now calls
+  `config.SetDirForTest(dir)`; `TestAuthTestsAreIsolated` guards it.
+- **F2 — Refresh-token rotation race.** Concurrent `/auth/refresh` with one cookie can both
+  pass the `revokedAt` check and each mint a replacement. Needs a conditional
+  `revokedAt: null` revoke inside the rotation transaction.
+- **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counts users before
+  `user.create` with no lock; concurrent invites exceed `Organization.seats`. Needs a
+  `SELECT … FOR UPDATE` on the org row inside the check+create transaction.
+- **F4 — Aggregation-limit labelling still partial.** Project list/detail, developer detail,
+  and settings compute from the capped 500-session fetch without a truncation notice.
+- **F5 — `isError` still not surfaced** on `useManagerProject` / `useManagerUsers` /
+  `useManagerSessions` in project detail, developer detail, and settings — failed fetches
+  render as empty/zero or "not found".
+- **F6 — Reconcile duplicates LLM work** across backend instances: separate instances select
+  the same stale `PENDING` rows and each dispatch the pipeline. Needs an atomic claim.
+- **F7 — Cross-host `NEXT_PUBLIC_API_URL` breaks the refresh cookie** (`SameSite=Lax` won't
+  ride a cross-site XHR). Docs to steer deployments to the same-origin rewrite.
+
+---
+
+## Rounds 1–5 — resolved
+
+This section is kept as a record of what was found and how each item was closed.
 
 **Fixed since the last revision:** R-05 (session-id idempotency now also checks project),
 R-06 (malformed `.devscope.yaml` now errors), R-07 (register slug race → 409),
