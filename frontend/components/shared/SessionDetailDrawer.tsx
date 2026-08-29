@@ -323,15 +323,16 @@ export function SessionDetailDrawer({
     return ()   => document.removeEventListener('keydown', onKeyDown)
   }, [sessionId, onClose])
 
-  const { data: managerSession,   isLoading: mLoading } = useManagerSession(
+  const { data: managerSession,   isLoading: mLoading, isError: mError } = useManagerSession(
     viewerRole === 'manager' ? sessionId : null,
   )
-  const { data: developerSession, isLoading: dLoading } = useDeveloperSession(
+  const { data: developerSession, isLoading: dLoading, isError: dError } = useDeveloperSession(
     viewerRole === 'developer' ? sessionId : null,
   )
 
   const session   = viewerRole === 'manager' ? managerSession   : developerSession
   const isLoading = viewerRole === 'manager' ? mLoading         : dLoading
+  const isError   = viewerRole === 'manager' ? mError           : dError
 
   if (!sessionId) return null
 
@@ -384,7 +385,21 @@ export function SessionDetailDrawer({
         </div>
 
         {/* Body */}
-        {isLoading || !session ? <DrawerSkeleton /> : <SessionContent session={session} />}
+        {isError ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+            <AlertCircle size={28} style={{ color: 'var(--text-faint)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+              Couldn’t load this session
+            </p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Something went wrong reaching the server. Close and try again.
+            </p>
+          </div>
+        ) : isLoading || !session ? (
+          <DrawerSkeleton />
+        ) : (
+          <SessionContent session={session} />
+        )}
       </div>
     </>
   )

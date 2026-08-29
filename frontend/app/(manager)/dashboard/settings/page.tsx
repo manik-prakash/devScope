@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Users, Key, AlertTriangle, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
+import { EmptyState } from '@/components/shared'
 import { InviteUserModal } from '@/components/manager/InviteUserModal'
 import { TempPasswordModal } from '@/components/manager/TempPasswordModal'
 import {
@@ -123,6 +124,7 @@ function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps)
   const managerQuery = useManagerUsers(!isAdmin && viewerRole !== null)
   const users        = (isAdmin ? adminQuery.data : managerQuery.data) ?? []
   const usersLoading = isAdmin ? adminQuery.isLoading : managerQuery.isLoading
+  const usersError   = isAdmin ? adminQuery.isError : managerQuery.isError
 
   const { data: sessData } = useManagerSessions(1, 200)
   const sessions = sessData?.sessions ?? []
@@ -177,7 +179,13 @@ function MembersTab({ viewerRole, viewerUserId, onInviteOpen }: MembersTabProps)
         className="rounded border"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        {usersLoading ? (
+        {usersError ? (
+          <EmptyState
+            icon={AlertTriangle}
+            heading="Couldn’t load members"
+            subtext="Something went wrong reaching the server. Refresh to try again."
+          />
+        ) : usersLoading ? (
           <div className="space-y-px p-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div
@@ -308,18 +316,28 @@ function ApiKeysTab() {
 // ─── Danger zone tab ──────────────────────────────────────────────────────────
 
 function DangerTab() {
-  const { data: org } = useManagerOrg()
+  const { data: org, isError: orgError } = useManagerOrg()
   const [inputValue, setInputValue]   = useState('')
   const [confirmed, setConfirmed]     = useState(false)
 
   const slugToMatch = org?.slug ?? ''
-  const isMatch     = inputValue === slugToMatch
+  const isMatch     = slugToMatch !== '' && inputValue === slugToMatch
 
   function handleDelete() {
     if (!isMatch) return
     // TODO: DELETE /admin/org when backend adds endpoint
     console.log('[STUB] Delete org:', org?.id)
     setConfirmed(true)
+  }
+
+  if (orgError) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        heading="Couldn’t load organisation settings"
+        subtext="Something went wrong reaching the server. Refresh to try again."
+      />
+    )
   }
 
   if (confirmed) {
