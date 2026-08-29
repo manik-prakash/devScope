@@ -18,7 +18,27 @@ export function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function subScores(stats: SessionStats | undefined) {
+export interface SubScores {
+  promptQuality:       number
+  iterationEfficiency: number
+  toolUtilization:     number
+}
+
+// Per-dimension scores for a session. Prefers the real evaluator output
+// (`scoreDetail`, from the multi-stage pipeline); falls back to a rough
+// stats-derived heuristic only for legacy / unsigned / unscored sessions that
+// have no `scoreDetail`.
+export function subScores(session: Pick<Session, 'scoreDetail' | 'stats'> | undefined): SubScores {
+  const detail = session?.scoreDetail
+  if (detail) {
+    return {
+      promptQuality:       detail.promptQuality,
+      iterationEfficiency: detail.iterationEfficiency,
+      toolUtilization:     detail.toolUtilization,
+    }
+  }
+
+  const stats = session?.stats
   if (!stats) return { promptQuality: 0, iterationEfficiency: 0, toolUtilization: 0 }
   const avg   = stats.avgPromptLength ?? 0
   const iters = stats.totalIterations ?? 0
@@ -146,7 +166,7 @@ export function buildRadarData(thisWeek: Session[], lastWeek: Session[]): RadarD
     const ie:  number[] = []
     const tu:  number[] = []
     for (const s of sessions) {
-      const sc = subScores(s.stats as SessionStats | undefined)
+      const sc = subScores(s)
       pq.push(sc.promptQuality)
       ie.push(sc.iterationEfficiency)
       tu.push(sc.toolUtilization)

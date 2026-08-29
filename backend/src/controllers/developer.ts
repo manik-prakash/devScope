@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { notFound } from '../utils/errors.js';
 import { updateMeSchema } from '../validators/developer.js';
 import { parsePageParams } from '../utils/pagination.js';
+import { scoreDetailInclude } from '../utils/sessionSelect.js';
 
 export const updateMe = async (req: Request, res: Response) => {
   const { name } = updateMeSchema.parse(req.body);
@@ -27,6 +28,7 @@ export const getSessions = async (req: Request, res: Response) => {
       take: limit,
       include: {
         project: { select: { name: true, slug: true } },
+        ...scoreDetailInclude,
       }
     }),
     req.prisma.session.count({ where: { userId: req.user!.userId } }),

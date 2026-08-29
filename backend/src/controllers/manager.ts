@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { conflict, forbidden, notFound } from '../utils/errors.js';
 import { createProjectSchema, inviteEngineerSchema } from '../validators/manager.js';
 import { parsePageParams } from '../utils/pagination.js';
+import { scoreDetailInclude } from '../utils/sessionSelect.js';
 
 export const getOrg = async (req: Request, res: Response) => {
   const org = await req.prisma.organization.findUnique({
@@ -233,6 +234,7 @@ export const getSessions = async (req: Request, res: Response) => {
       include: {
         user: { select: { name: true, email: true } },
         project: { select: { name: true, slug: true } },
+        ...scoreDetailInclude,
       }
     }),
     req.prisma.session.count({ where }),
@@ -258,6 +260,7 @@ export const getSessionById = async (req: Request, res: Response) => {
     include: {
       user: { select: { name: true, email: true } },
       project: { select: { name: true, slug: true } },
+      ...scoreDetailInclude,
     }
   });
 

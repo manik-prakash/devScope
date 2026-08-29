@@ -119,6 +119,28 @@ describe('getSessionById — project scoping', () => {
     expect((res.body as { id: string }).id).toBe('s1');
   });
 
+  it('includes the real evaluator dimensions (scoreDetail) in the query', async () => {
+    const findUnique = vi.fn().mockResolvedValue(session);
+    const req = mockReq({
+      params: { sessionId: 's1' },
+      user: { userId: 'adm-1', orgId: 'org-acme', role: 'ADMIN' },
+      prisma: {
+        session: { findUnique },
+        projectMember: { findUnique: vi.fn().mockResolvedValue(null) },
+      },
+    });
+
+    await getSessionById(req, mockRes());
+
+    const include = findUnique.mock.calls[0][0].include;
+    expect(include.scoreDetail).toBeDefined();
+    expect(include.scoreDetail.select).toMatchObject({
+      promptQuality: true,
+      iterationEfficiency: true,
+      toolUtilization: true,
+    });
+  });
+
   it('returns the session for an admin without a membership check', async () => {
     const pmFind = vi.fn().mockResolvedValue(null);
     const req = mockReq({

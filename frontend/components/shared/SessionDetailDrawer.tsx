@@ -5,36 +5,9 @@ import { X, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react'
 import { ScoreBadge } from './ScoreBadge'
 import { AgentBadge } from './AgentBadge'
 import { useManagerSession, useDeveloperSession } from '@/lib/queries/sessions'
+import { subScores } from '@/lib/queries/me'
 import { formatDuration, formatDateTime, clamp, truncate } from '@/lib/utils'
 import type { Session, SessionStats } from '@/lib/types'
-
-// ─── Sub-score derivation ─────────────────────────────────────────────────────
-
-interface SubScores {
-  promptQuality:       number   // 0-100
-  iterationEfficiency: number   // 0-100
-  toolUtilization:     number   // 0-100
-}
-
-function computeSubScores(stats: SessionStats | undefined): SubScores {
-  if (!stats) return { promptQuality: 0, iterationEfficiency: 0, toolUtilization: 0 }
-
-  const avg   = stats.avgPromptLength ?? 0
-  const iters = stats.totalIterations ?? 0
-  const tools = stats.totalToolCalls  ?? 0
-  const proms = Math.max(1, stats.totalPrompts ?? 1)
-
-  // Longer, more detailed prompts → higher quality (500 chars ≈ 100)
-  const promptQuality = clamp(avg / 5, 0, 100)
-
-  // Fewer iterations per prompt → clearer prompts (1 iter/prompt ≈ 85, 6+ ≈ 0)
-  const iterationEfficiency = clamp(100 - (iters / proms) * 15, 0, 100)
-
-  // More tool calls per prompt → actively using the agent (5 calls/prompt ≈ 100)
-  const toolUtilization = clamp((tools / proms) * 20, 0, 100)
-
-  return { promptQuality, iterationEfficiency, toolUtilization }
-}
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 
@@ -108,7 +81,7 @@ function DrawerSkeleton() {
 function SessionContent({ session }: { session: Session }) {
   const stats     = session.stats as SessionStats | undefined
   const feedback  = session.feedback
-  const subScores = computeSubScores(stats)
+  const dims      = subScores(session)
   const isScored  = session.evaluationStatus === 'SCORED'
   const fileTypes = stats?.fileTypesTouched ?? []
 
@@ -173,9 +146,9 @@ function SessionContent({ session }: { session: Session }) {
         </div>
 
         <div className="space-y-3">
-          <ProgressBar label="Prompt Quality"        value={subScores.promptQuality}       />
-          <ProgressBar label="Iteration Efficiency"  value={subScores.iterationEfficiency}  />
-          <ProgressBar label="Tool Utilization"      value={subScores.toolUtilization}      />
+          <ProgressBar label="Prompt Quality"        value={dims.promptQuality}       />
+          <ProgressBar label="Iteration Efficiency"  value={dims.iterationEfficiency}  />
+          <ProgressBar label="Tool Utilization"      value={dims.toolUtilization}      />
         </div>
       </section>
 

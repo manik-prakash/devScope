@@ -40,17 +40,33 @@ describe('buildTrendData', () => {
 })
 
 describe('subScores', () => {
-  it('produces non-degenerate values from camelCase stats', () => {
+  it('uses the real evaluator dimensions when scoreDetail is present', () => {
     const s = subScores({
-      avgPromptLength: 500,
-      totalIterations: 2,
-      totalPrompts: 2,
-      totalToolCalls: 6,
-    } as unknown as SessionStats)
+      scoreDetail: { promptQuality: 73, iterationEfficiency: 61, toolUtilization: 44 },
+      // deliberately-degenerate stats that the heuristic would score very differently
+      stats: { avgPromptLength: 99999, totalIterations: 0, totalPrompts: 1, totalToolCalls: 99 },
+    } as unknown as Session)
+
+    expect(s).toEqual({ promptQuality: 73, iterationEfficiency: 61, toolUtilization: 44 })
+  })
+
+  it('falls back to the stats heuristic when scoreDetail is absent (legacy / unsigned sessions)', () => {
+    const s = subScores({
+      stats: {
+        avgPromptLength: 500,
+        totalIterations: 2,
+        totalPrompts: 2,
+        totalToolCalls: 6,
+      } as unknown as SessionStats,
+    } as unknown as Session)
 
     expect(s.promptQuality).toBeGreaterThan(0)
     expect(s.toolUtilization).toBeGreaterThan(0)
     expect(s.iterationEfficiency).toBeGreaterThan(0)
     expect(s.iterationEfficiency).toBeLessThanOrEqual(100)
+  })
+
+  it('returns zeros when neither is present', () => {
+    expect(subScores(undefined)).toEqual({ promptQuality: 0, iterationEfficiency: 0, toolUtilization: 0 })
   })
 })

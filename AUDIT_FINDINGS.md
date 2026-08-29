@@ -14,10 +14,10 @@ R-11 (`config.Set` now hardens file mode), R-12 (`parseDuration` rejects zero/ov
 payload size bounds), R-13 (redaction now covers OpenAI/OpenRouter, Slack, Google, JWT, and
 URL-embedded credentials), R-16 (unsupported agent now exits non-zero), D-04 doc/lint items.
 
-**Fixed in round 5 (in progress):** R-14 (settings page + session detail drawer now render an
-error state on request failure — error-state coverage is complete); D-03 partial (the two
-route-group providers now alias one shared `app/providers.tsx` — the pagination/filter-UI
-duplication is what remains under D-03).
+**Fixed in round 5 (in progress):** R-14 (error-state coverage complete);
+D-03 partial (route-group providers consolidated into `app/providers.tsx` — pagination/filter
+UI is what's left); R-03 + D-02 (`SessionScore` dimensions now exposed on session list/detail
+responses; one shared `subScores()` prefers them, heuristic only as fallback).
 
 ## Validation summary
 
@@ -54,18 +54,6 @@ server-side aggregation / cursor-paginated endpoints; an interim is honest "late
 Evidence: `frontend/app/(developer)/me/sessions/page.tsx`,
 `frontend/app/(manager)/dashboard/sessions/page.tsx`,
 `frontend/app/(manager)/dashboard/page.tsx`, `frontend/lib/queries/me.ts`.
-
-### R-03 — Frontend score breakdowns are heuristic duplicates, not evaluator scores (P1)
-
-The backend stores per-dimension `SessionScore` values, but the session type and API
-responses do not expose them. The dashboard and detail drawer independently re-derive
-prompt-quality, iteration-efficiency, and tool-utilization from raw stats, so the displayed
-breakdown does not represent the actual evaluator output. Fix needs new fields on the
-session-detail responses + `Session` type, then a rewire of the two frontend call sites.
-
-Evidence: `backend/prisma/schema.prisma:218-257`,
-`backend/src/services/evaluator/index.ts:154-175`, `frontend/lib/queries/me.ts:21-31`,
-`frontend/components/shared/SessionDetailDrawer.tsx:19-36,175-178`.
 
 ### R-04 — Evaluation is fire-and-forget with no recovery mechanism (P1)
 
@@ -122,12 +110,6 @@ Evidence: `backend/prisma/schema.prisma`, `backend/src/controllers/admin.ts:25-4
 refresh, cookie handling, and cleanup. The two paths already differ in which cookies they
 touch and can drift further when session-state changes are made.
 
-### D-02 — Score heuristic logic is duplicated across frontend modules (P2)
-
-The same heuristic scoring lives in `frontend/lib/queries/me.ts:21-31` and
-`frontend/components/shared/SessionDetailDrawer.tsx:19-36`, separate from the backend's
-canonical evaluator model. Resolves naturally with R-03.
-
 ### D-03 — Pagination/filter UI remains repeated (P2)
 
 The session screens repeat filter and pagination components (e.g. a `PaginationBar`
@@ -143,8 +125,7 @@ checked without exposing the value.
 
 ## Recommended remaining order
 
-1. Score-detail API exposure (R-03/D-02), all-time data loading (R-02), durable evaluation
-   recovery (R-04).
+1. All-time data loading (R-02), durable evaluation recovery (R-04).
 2. Refresh-token lifecycle and storage hardening (R-08, R-09).
 3. Decide on the org-delete flow (R-15) and CLI exit semantics (R-01).
 4. Seat/plan enforcement (R-17); consolidate duplicated auth/provider logic (D-01, D-03).

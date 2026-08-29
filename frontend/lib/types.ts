@@ -3,6 +3,7 @@
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'DEVELOPER'
 export type EvaluationStatus = 'PENDING' | 'SCORED' | 'FAILED' | 'SKIPPED'
+export type EvaluationConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
 export type Plan = 'FREE' | 'PRO' | 'ENTERPRISE'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -180,6 +181,16 @@ export interface Session {
   evaluationStatus: EvaluationStatus
   score: number | null
   feedback: ScoreFeedback | null
+  /** Real per-dimension evaluator output. Present on session-detail and list
+   *  responses for sessions that ran the multi-stage evaluator; null for legacy
+   *  / unsigned / unscored sessions. */
+  scoreDetail?: {
+    promptQuality: number
+    iterationEfficiency: number
+    toolUtilization: number
+    overallScore: number
+    confidence: EvaluationConfidence
+  } | null
   evaluatedAt: string | null
   createdAt: string
   updatedAt?: string
