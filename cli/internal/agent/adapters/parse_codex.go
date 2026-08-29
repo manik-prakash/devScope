@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -208,9 +207,11 @@ func (a *CodexAdapter) ParseSessionFile(filePath string) (*NormalizedSession, er
 		return nil, fmt.Errorf("error reading session file %s: %w", filePath, err)
 	}
 
-	// Derive session ID.
+	// Derive session ID. A native id is used only if it is already a valid UUID;
+	// otherwise it (or the file name) is hashed into a deterministic UUID the
+	// backend will accept.
 	if nativeSessionID != "" {
-		session.SessionID = nativeSessionID
+		session.SessionID = normalizeSessionID(nativeSessionID)
 	} else {
 		session.SessionID = deriveCodexSessionID(filePath)
 	}
@@ -304,10 +305,8 @@ func extractFilePathFromArgs(args string) string {
 	return ""
 }
 
-// deriveCodexSessionID generates a deterministic session ID from just
-// the filename, since Codex filenames contain date/rollout info.
+// deriveCodexSessionID generates a deterministic RFC 4122 UUID from just the
+// filename, since Codex filenames contain date/rollout info.
 func deriveCodexSessionID(filePath string) string {
-	base := filepath.Base(filePath)
-	hash := sha256.Sum256([]byte(base))
-	return fmt.Sprintf("%x", hash[:16])
+	return deriveUUIDv8(filepath.Base(filePath))
 }

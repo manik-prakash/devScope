@@ -1,19 +1,37 @@
 import { z } from 'zod';
 
+// Known stat fields the CLI sends (snake_case — the exact wire shape the HMAC
+// signs). Unknown keys pass through for forward-compat; known keys are typed so
+// a garbage value can't reach normalizeStats / the evaluator.
+const StatsSchema = z
+  .object({
+    total_prompts: z.number(),
+    total_responses: z.number(),
+    total_iterations: z.number(),
+    total_tool_calls: z.number(),
+    files_changed_count: z.number(),
+    shell_commands_count: z.number(),
+    avg_prompt_length: z.number(),
+    avg_response_length: z.number(),
+    file_types_touched: z.array(z.string()),
+  })
+  .partial()
+  .passthrough();
+
 export const SessionPayloadSchema = z.object({
   session_id: z.string().uuid(),
-  user_id: z.string(),
-  org_id: z.string(),
-  project_id: z.string(),
-  agent: z.string(),
+  user_id: z.string().min(1),
+  org_id: z.string().min(1),
+  project_id: z.string().min(1),
+  agent: z.string().min(1),
   agent_version: z.string(),
-  started_at: z.string(),
-  ended_at: z.string(),
-  duration_ms: z.number().int(),
-  stats: z.record(z.any()),
+  started_at: z.string().datetime(),
+  ended_at: z.string().datetime(),
+  duration_ms: z.number().int().nonnegative(),
+  stats: StatsSchema,
   messages: z.array(z.object({
     role: z.string(),
-    content: z.string(),
+    content: z.string().max(1_000_000),
     content_length: z.number(),
     tool_calls: z.array(z.object({
       id: z.string(),
@@ -24,7 +42,7 @@ export const SessionPayloadSchema = z.object({
       is_shell_command: z.boolean(),
     })).optional(),
     timestamp: z.string().optional(),
-  })).optional(),
+  })).max(5000).optional(),
   cli_version: z.string(),
   signature: z.string(),
 });

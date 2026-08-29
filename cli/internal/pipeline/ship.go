@@ -45,10 +45,21 @@ func ShipSession(client SessionSubmitter, queueDir string, payload *api.SessionP
 		return fmt.Errorf("failed to marshal offline payload (original error: %v): %w", result.Err, err)
 	}
 
-	queuePath := filepath.Join(queueDir, fmt.Sprintf("%s.json", payload.SessionID))
+	if err := os.MkdirAll(queueDir, 0o700); err != nil {
+		return fmt.Errorf("failed to create queue dir (original error: %v): %w", result.Err, err)
+	}
 
-	if err := os.WriteFile(queuePath, rawBytes, 0600); err != nil {
+	// Write to a temp file then rename so a kill mid-write can't leave a
+	// truncated payload that DrainQueue would later quarantine or drop.
+	queuePath := filepath.Join(queueDir, fmt.Sprintf("%s.json", payload.SessionID))
+	tmpPath := queuePath + ".tmp"
+
+	if err := os.WriteFile(tmpPath, rawBytes, 0o600); err != nil {
 		return fmt.Errorf("failed to queue session locally (original error: %v): %w", result.Err, err)
+	}
+	if err := os.Rename(tmpPath, queuePath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to finalize queued session (original error: %v): %w", result.Err, err)
 	}
 
 	// We return nil to signify the workflow itself is handled properly.
@@ -74,6 +85,8 @@ func DrainQueue(client SessionSubmitter, queueDir string) (int, int) {
 	failed := 0
 
 	for _, entry := range entries {
+		// Only whole `.json` payloads — skip `.tmp` (in-flight writes) and
+		// `.corrupt` (already quarantined).
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
@@ -87,8 +100,9 @@ func DrainQueue(client SessionSubmitter, queueDir string) (int, int) {
 
 		var payload api.SessionPayload
 		if err := json.Unmarshal(rawBytes, &payload); err != nil {
-			// Malformed cache block, purge aggressively
-			os.Remove(fullPath)
+			// Malformed — quarantine rather than delete, so a truncated write
+			// (machine sleep / crash) is recoverable and not silent data loss.
+			os.Rename(fullPath, fullPath+".corrupt")
 			failed++
 			continue
 		}

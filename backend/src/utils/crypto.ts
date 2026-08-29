@@ -43,7 +43,7 @@ export function verifySignature(payload: any, signingSecret: string): boolean {
       Buffer.from(sigHex, 'hex'),
       Buffer.from(expected, 'hex')
     );
-  } catch (error) {
+  } catch {
     return false;
   }
 }

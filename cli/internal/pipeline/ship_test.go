@@ -62,6 +62,37 @@ func TestShipSession_RetriableQueuesFile(t *testing.T) {
 	}
 }
 
+func TestShipSession_CreatesMissingQueueDir(t *testing.T) {
+	queueDir := filepath.Join(t.TempDir(), "not", "there", "queue")
+	submitter := &mockSubmitter{
+		result: &api.SubmitResult{Retriable: true, Err: errors.New("offline")},
+	}
+
+	if err := ShipSession(submitter, queueDir, &api.SessionPayload{SessionID: "q1"}); err != nil {
+		t.Fatalf("ShipSession: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(queueDir, "q1.json")); err != nil {
+		t.Errorf("expected q1.json in a freshly-created queue dir: %v", err)
+	}
+}
+
+func TestDrainQueue_MalformedFileQuarantinedNotDeleted(t *testing.T) {
+	queueDir := t.TempDir()
+	os.WriteFile(filepath.Join(queueDir, "good.json"), []byte(`{"session_id":"good"}`), 0o600)
+	os.WriteFile(filepath.Join(queueDir, "torn.json"), []byte(`{"session_id":"to`), 0o600) // truncated
+
+	submitter := &mockSubmitter{result: &api.SubmitResult{Accepted: true}}
+	DrainQueue(submitter, queueDir)
+
+	if _, err := os.Stat(filepath.Join(queueDir, "torn.json")); !os.IsNotExist(err) {
+		t.Error("torn.json should have been renamed away, not left in place")
+	}
+	if _, err := os.Stat(filepath.Join(queueDir, "torn.json.corrupt")); err != nil {
+		t.Errorf("expected torn.json.corrupt quarantine file: %v", err)
+	}
+}
+
 func TestShipSession_TerminalFailsInstantly(t *testing.T) {
 	queueDir := t.TempDir()
 	submitter := &mockSubmitter{

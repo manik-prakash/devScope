@@ -1,6 +1,7 @@
 import { type Request, type Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { verifySignature } from '../utils/crypto.js';
-import { forbidden } from '../utils/errors.js';
+import { forbidden, badRequest, conflict } from '../utils/errors.js';
 import { evaluatePipeline } from '../services/evaluator/index.js';
 import { SessionPayloadSchema } from '../validators/cli.js';
 import { normalizeStats } from '../utils/stats.js';
@@ -45,6 +46,17 @@ export const createSession = async (req: Request, res: Response) => {
     throw forbidden('Organization ID mismatch');
   }
 
+  // Timestamp sanity — the schema guarantees ISO strings; reject a backwards or
+  // unparseable window here so it's a 400, not a Prisma DateTime 500.
+  const startedAt = new Date(payload.started_at);
+  const endedAt = new Date(payload.ended_at);
+  if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) {
+    throw badRequest('started_at / ended_at is not a valid timestamp', 'INVALID_TIMESTAMP');
+  }
+  if (endedAt < startedAt) {
+    throw badRequest('ended_at is before started_at', 'INVALID_TIMESTAMP');
+  }
+
   // Signature verification runs against the raw request body — the exact bytes
   // the CLI signed — not the parsed `payload`, whose `stats` we normalize below.
   const signatureValid = verifySignature(req.body, req.apiKey!.signingSecret);
@@ -63,36 +75,51 @@ export const createSession = async (req: Request, res: Response) => {
     throw forbidden('User is not a member of this project');
   }
 
-  // Upsert session
-  const session = await req.prisma.session.upsert({
-    where: { id: payload.session_id },
-    create: {
-      id: payload.session_id,
-      userId: payload.user_id,
-      orgId: payload.org_id,
-      projectId: payload.project_id,
-      apiKeyId: req.apiKey!.id,
-      agent: payload.agent,
-      agentVersion: payload.agent_version,
-      startedAt: new Date(payload.started_at),
-      endedAt: new Date(payload.ended_at),
-      durationMs: BigInt(payload.duration_ms),
-      cliVersion: payload.cli_version,
-      messages: payload.messages || [],
-      stats: normalizeStats(payload.stats),
-      signatureValid,
-      evaluationStatus: signatureValid ? 'PENDING' : 'SKIPPED',
-    },
-    update: {}, // sessions are immutable once sent from CLI
-  });
+  // Insert the session. Sessions are immutable once received, so a resubmit of
+  // the same id (the CLI queues and retries) is a no-op: `create` hits the PK
+  // unique constraint (P2002), and only the request that actually created the
+  // row dispatches evaluation. This closes the race where two concurrent submits
+  // both see `PENDING` and each start the pipeline.
+  let session: Awaited<ReturnType<typeof req.prisma.session.findUnique>>;
+  let created = false;
+  try {
+    session = await req.prisma.session.create({
+      data: {
+        id: payload.session_id,
+        userId: payload.user_id,
+        orgId: payload.org_id,
+        projectId: payload.project_id,
+        apiKeyId: req.apiKey!.id,
+        agent: payload.agent,
+        agentVersion: payload.agent_version,
+        startedAt,
+        endedAt,
+        durationMs: BigInt(payload.duration_ms),
+        cliVersion: payload.cli_version,
+        messages: payload.messages || [],
+        stats: normalizeStats(payload.stats),
+        signatureValid,
+        evaluationStatus: signatureValid ? 'PENDING' : 'SKIPPED',
+      },
+    });
+    created = true;
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
+      throw err;
+    }
+    session = await req.prisma.session.findUnique({ where: { id: payload.session_id } });
+    if (!session) throw err;
+    // The row exists but belongs to someone else — don't 202 "success" while
+    // silently dropping this caller's telemetry.
+    if (session.userId !== payload.user_id || session.orgId !== payload.org_id) {
+      throw conflict('A session with this id already exists', 'SESSION_ID_TAKEN');
+    }
+  }
 
-  // Kick off evaluation without blocking the CLI's request. The pipeline makes
-  // several LLM calls and can outlast the CLI's HTTP timeout; the CLI only needs
-  // to know the session was persisted. Only a fresh PENDING session is
-  // evaluated — a resubmit of the same session id (upsert `update: {}`) must not
-  // re-run the pipeline. `evaluatePipeline` never throws; the catch is only for
-  // a synchronous throw before its first await.
-  if (signatureValid && session.evaluationStatus === 'PENDING') {
+  // Kick off evaluation without blocking the CLI's request — the pipeline makes
+  // several LLM calls and can outlast the CLI's HTTP timeout. `evaluatePipeline`
+  // never throws; the catch is only for a synchronous throw before its first await.
+  if (created && signatureValid && session.evaluationStatus === 'PENDING') {
     void evaluatePipeline(session.id).catch((err) =>
       console.error(`[cli] evaluation kickoff failed for ${session.id}:`, err),
     );

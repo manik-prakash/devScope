@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -218,7 +219,68 @@ func TestResolveProject(t *testing.T) {
 	}
 }
 
+// TestResolveProjectForDir verifies the repo-local .devscope.yaml `project:`
+// field is actually threaded into resolution (it was previously ignored — run
+// and status passed an empty repo slug).
+func TestResolveProjectForDir(t *testing.T) {
+	cfg := &Config{
+		DefaultProject: "default-proj",
+		Projects: []Project{
+			{ID: "1", Slug: "repo-proj", Name: "Repo Project"},
+			{ID: "2", Slug: "default-proj", Name: "Default Project"},
+		},
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".devscope.yaml"), []byte("project: repo-proj\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No flag → the repo file wins over the global default.
+	p, err := ResolveProjectForDir(cfg, "", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Slug != "repo-proj" {
+		t.Errorf("expected repo-proj from .devscope.yaml, got %s", p.Slug)
+	}
+
+	// A dir with no .devscope.yaml falls back to the global default.
+	p, err = ResolveProjectForDir(cfg, "", t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Slug != "default-proj" {
+		t.Errorf("expected default-proj fallback, got %s", p.Slug)
+	}
+}
+
 // TestLoadRepoConfig tests .devscope.yaml parsing.
+func TestSave_TightensExistingFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix file modes not meaningful on Windows")
+	}
+	tmp := t.TempDir()
+	devScopeDir = tmp
+
+	// Pre-create the config file with loose permissions.
+	if err := os.WriteFile(ConfigPath(), []byte("api_key: old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Save(&Config{APIKey: "new-secret"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Stat(ConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("config mode = %o, want 600", perm)
+	}
+}
+
 func TestLoadRepoConfig(t *testing.T) {
 	tmp := t.TempDir()
 

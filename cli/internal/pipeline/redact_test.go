@@ -103,6 +103,20 @@ func TestRedactSession_CustomPatterns(t *testing.T) {
 	}
 }
 
+func TestInvalidPatterns(t *testing.T) {
+	bad := InvalidPatterns([]string{`good_[0-9]+`, ``, `invalid(`, `also[bad`})
+	if len(bad) != 2 {
+		t.Fatalf("expected 2 invalid patterns, got %d: %v", len(bad), bad)
+	}
+	if bad[0] != `invalid(` || bad[1] != `also[bad` {
+		t.Errorf("unexpected invalid set: %v", bad)
+	}
+
+	if got := InvalidPatterns([]string{`^ok$`, `\d+`}); got != nil {
+		t.Errorf("expected no invalid patterns, got %v", got)
+	}
+}
+
 func TestRedactSession_MalformedJSONSafety(t *testing.T) {
 	sess := &adapters.NormalizedSession{
 		SessionID: "json-safe",

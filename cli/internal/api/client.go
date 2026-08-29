@@ -42,11 +42,13 @@ type MeResponse struct {
 
 // RecentSession is a single session returned from GET /api/v1/sessions/recent.
 type RecentSession struct {
-	SessionID string  `json:"session_id"`
-	Agent     string  `json:"agent"`
-	StartedAt string  `json:"started_at"`
-	Score     float64 `json:"score"`
-	Status    string  `json:"status"` // "queued" | "scored" | "failed" | "skipped"
+	SessionID string `json:"session_id"`
+	Agent     string `json:"agent"`
+	StartedAt string `json:"started_at"`
+	// Score is nil for sessions that were never scored (queued/failed/skipped);
+	// the backend sends JSON null.
+	Score  *float64 `json:"score"`
+	Status string   `json:"status"` // "queued" | "scored" | "failed" | "skipped"
 }
 
 // RecentSessionsResponse is the typed response from GET /api/v1/sessions/recent.
@@ -94,7 +96,11 @@ type SessionPayload struct {
 	// Content and tool I/O have been scrubbed of all secrets before inclusion.
 	Messages     []SanitizedMessage `json:"messages,omitempty"`
 	CLIVersion   string             `json:"cli_version"`
-	Signature    string             `json:"signature"`
+	// Signature is omitempty so that when SignPayload blanks it before hashing,
+	// the canonical bytes carry NO "signature" key — matching the backend, which
+	// strips the key entirely (`const { signature, ...rest } = payload`) before
+	// verifying. After signing, the hex is non-empty and is sent normally.
+	Signature string `json:"signature,omitempty"`
 }
 
 // SessionStats holds the behavioral metadata extracted from a session.

@@ -14,6 +14,29 @@ import (
 	"github.com/manik-prakash/devscope-cli/internal/pipeline"
 )
 
+// resolveAgentInvocation decides which agent to wrap. Precedence: a positional
+// `devscope run <agent> …` arg, else the configured default (`config set agent`).
+// `config set custom_command` overrides only the binary that is exec'd — the
+// slug used for adapter selection and log discovery still comes from the agent
+// name. Returns (slug, execCmd, passthroughArgs, err).
+func resolveAgentInvocation(args []string, cfg *config.Config) (string, string, []string, error) {
+	raw := cfg.Agent
+	var rest []string
+	if len(args) > 0 {
+		raw = args[0]
+		rest = args[1:]
+	}
+	if raw == "" {
+		return "", "", nil, fmt.Errorf(
+			"no agent specified — run \"devscope run <agent>\" or set a default with \"devscope config set agent <agent>\"")
+	}
+	execCmd := raw
+	if cfg.CustomCommand != "" {
+		execCmd = cfg.CustomCommand
+	}
+	return raw, execCmd, rest, nil
+}
+
 var runCmd = &cobra.Command{
 	Use:   "run [agent] [args...]",
 	Short: "Wrap an AI agent to automatically capture and ship behavioral telemetry",
@@ -24,7 +47,7 @@ calculates behavioral telemetry metadata before shipping to DevScope.
 Example:
   devscope run claude code
   devscope run my-custom-agent --args`,
-	Args: cobra.MinimumNArgs(1),
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1. Core Integrations
 		cfg, err := config.Load()
@@ -46,26 +69,25 @@ Example:
 		// 2. Drain Existing Offline Queues implicitly
 		pipeline.DrainQueue(client, config.QueueDir())
 
-		// 3. Command Definition
-		agentRaw := args[0]
-		agentCmd := args[0]
-		var agentArgs []string
-		if len(args) > 1 {
-			agentArgs = args[1:]
+		// 3. Command Definition — positional arg wins, else the configured
+		// default agent; `custom_command` overrides only the exec'd binary.
+		agentRaw, agentCmd, agentArgs, err := resolveAgentInvocation(args, cfg)
+		if err != nil {
+			return err
 		}
 
 		agentSlug := agent.ResolveAgent(agentRaw)
 		agentVersion := agent.ProbeVersion(agentCmd)
 		
-		// Map active project
+		// Map active project — repo-local .devscope.yaml `project:` participates.
+		cwd, _ := os.Getwd()
 		projectSlug, _ := cmd.Flags().GetString("project")
-		project, err := config.ResolveProject(cfg, projectSlug, "")
+		project, err := config.ResolveProjectForDir(cfg, projectSlug, cwd)
 		if err != nil {
 			return err
 		}
 
 		// 4. Pre-Flight Tracking
-		cwd, _ := os.Getwd()
 		preSnapshot, _ := pipeline.TakeSnapshot(cwd, pipeline.SnapshotOptions{})
 
 		startedAt := time.Now().UTC()
@@ -91,7 +113,9 @@ Example:
 		diff := pipeline.ComputeDiff(preSnapshot, postSnapshot)
 
 		// 7. Locate & Parse Log output
-		logFile := agent.FindLatestLogFile(agentSlug, "")
+		// Only consider transcripts touched during this run. A small grace absorbs
+		// filesystem mtime granularity and minor clock skew.
+		logFile := agent.FindLatestLogFile(agentSlug, "", startedAt.Add(-2*time.Second))
 		if logFile == "" {
 			// Without logs, we can't build meaningful metrics. Gracefully exit analytics, but workflow succeeded.
 			fmt.Println("devscope: Log capture disabled or missing. No session recorded.")
@@ -111,8 +135,13 @@ Example:
 		}
 		
 		sess, err := adapter.ParseSessionFile(logFile)
-		
-		if err != nil || sess == nil || len(sess.Messages) == 0 {
+		if err != nil {
+			// Don't fail the wrapped agent's exit code, but say why telemetry
+			// was skipped instead of vanishing silently.
+			fmt.Fprintf(os.Stderr, "devscope: could not parse session log: %v\n", err)
+			return nil
+		}
+		if sess == nil || len(sess.Messages) == 0 {
 			// Could occur if they simply booted and instantly killed without interaction.
 			return nil
 		}
@@ -127,6 +156,11 @@ Example:
 		repoCfg, _ := config.LoadRepoConfig(cwd)
 		if repoCfg != nil {
 			customPatterns = repoCfg.CustomStripPatterns
+		}
+		if bad := pipeline.InvalidPatterns(customPatterns); len(bad) > 0 {
+			fmt.Fprintf(os.Stderr,
+				"devscope: ignoring %d invalid custom_strip_patterns (secrets matching these will NOT be redacted): %v\n",
+				len(bad), bad)
 		}
 
 		sanitized, redactionCount, err := pipeline.RedactSession(sess, customPatterns)

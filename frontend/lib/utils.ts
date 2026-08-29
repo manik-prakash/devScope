@@ -165,6 +165,32 @@ export function isWithinDays(date: Date | string, days: number): boolean {
   return d >= startOfDayN(days)
 }
 
+// ─── Role labels ─────────────────────────────────────────────────────────────
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: 'Admin',
+  MANAGER: 'Manager',
+  DEVELOPER: 'Developer',
+}
+
+// Human label for a role. Falls back to "Developer" so an ADMIN is never
+// mislabelled (the table previously special-cased only MANAGER).
+export function roleLabel(role: string | undefined | null): string {
+  return (role && ROLE_LABEL[role]) || 'Developer'
+}
+
+// ─── Redirect safety ─────────────────────────────────────────────────────────
+
+// Returns `next` only if it is a same-origin path. Rejects protocol-relative
+// (`//host`), backslash-tricked (`/\host`, which browsers normalise to `//host`),
+// and absolute URLs — any of which would let `?next=` bounce the user off-site
+// after login.
+export function safeInternalPath(next: string | null | undefined): string | null {
+  if (!next || !next.startsWith('/')) return null
+  if (next.startsWith('//') || next.startsWith('/\\')) return null
+  return next
+}
+
 // Generate an array of the last N day labels (e.g. ["Apr 18", "Apr 19" ...])
 export function lastNDayLabels(n: number): string[] {
   const labels: string[] = []

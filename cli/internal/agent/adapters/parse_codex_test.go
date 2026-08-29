@@ -62,9 +62,9 @@ func TestCodexAdapter_ParseSessionFile(t *testing.T) {
 		t.Fatalf("ParseSessionFile failed: %v", err)
 	}
 
-	// Session ID from native field.
-	if session.SessionID != "codex-sess-001" {
-		t.Errorf("SessionID: got %q, want %q", session.SessionID, "codex-sess-001")
+	// Native session id "codex-sess-001" is not a UUID; it must be coerced.
+	if !zodUUIDRegex.MatchString(session.SessionID) {
+		t.Errorf("SessionID %q is not a Zod-acceptable UUID", session.SessionID)
 	}
 
 	// Agent.
@@ -168,13 +168,13 @@ func TestCodexAdapter_FallbackSessionID_FromID(t *testing.T) {
 		t.Fatalf("ParseSessionFile failed: %v", err)
 	}
 
-	// Should use "id" field.
-	if session.SessionID != "alt-id-xyz" {
-		t.Errorf("SessionID: got %q, want %q", session.SessionID, "alt-id-xyz")
+	// Falls back to the "id" field ("alt-id-xyz"), coerced to a UUID.
+	if !zodUUIDRegex.MatchString(session.SessionID) {
+		t.Errorf("SessionID %q is not a Zod-acceptable UUID", session.SessionID)
 	}
 }
 
-func TestCodexAdapter_FallbackSessionID_SHA256(t *testing.T) {
+func TestCodexAdapter_FallbackSessionID_DerivedUUID(t *testing.T) {
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "rollout-003.jsonl")
 	if err := os.WriteFile(file, []byte(codexFixtureNoID), 0o644); err != nil {
@@ -187,12 +187,12 @@ func TestCodexAdapter_FallbackSessionID_SHA256(t *testing.T) {
 		t.Fatalf("ParseSessionFile failed: %v", err)
 	}
 
-	// Should be sha256 of filename.
+	// Should be a deterministic UUID the backend will accept.
 	if session.SessionID == "" {
 		t.Error("SessionID should not be empty")
 	}
-	if len(session.SessionID) != 32 {
-		t.Errorf("fallback SessionID should be 32 hex chars, got %d", len(session.SessionID))
+	if !zodUUIDRegex.MatchString(session.SessionID) {
+		t.Errorf("fallback SessionID should be a Zod-acceptable UUID, got %q", session.SessionID)
 	}
 }
 

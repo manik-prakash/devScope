@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Download, Activity } from 'lucide-react'
+import { Download, Activity, AlertTriangle } from 'lucide-react'
 import { PageHeader, EmptyState, SessionDetailDrawer } from '@/components/shared'
 import { SessionsTable } from '@/components/manager/SessionsTable'
 import { useManagerSessions } from '@/lib/queries/sessions'
@@ -127,7 +127,7 @@ const PAGE_SIZE = 20
 
 export default function SessionsPage() {
   // Data
-  const { data: sessData, isLoading } = useManagerSessions(1, 200)
+  const { data: sessData, isLoading, isError } = useManagerSessions(1, 200)
   const allSessions                   = sessData?.sessions ?? []
 
   // Drawer
@@ -313,7 +313,13 @@ export default function SessionsPage() {
         className="rounded border"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        {isLoading ? (
+        {isError ? (
+          <EmptyState
+            icon={AlertTriangle}
+            heading="Couldn’t load sessions"
+            subtext="Something went wrong reaching the server. Refresh to try again."
+          />
+        ) : isLoading ? (
           <div className="space-y-px p-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div

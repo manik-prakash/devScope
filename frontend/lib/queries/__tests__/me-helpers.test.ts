@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { buildTrendData, subScores } from '@/lib/queries/me'
+import { buildTrendData, subScores, activeProjectId, ALL_PROJECTS_TAB } from '@/lib/queries/me'
 import type { Session, SessionStats } from '@/lib/types'
+
+describe('activeProjectId', () => {
+  it('returns null (show all) when the All tab is selected', () => {
+    expect(activeProjectId(ALL_PROJECTS_TAB, 'p1')).toBeNull()
+  })
+
+  it('returns the selected project id', () => {
+    expect(activeProjectId('p2', 'p1')).toBe('p2')
+  })
+
+  it('defaults to the first project before any tab is chosen', () => {
+    expect(activeProjectId(null, 'p1')).toBe('p1')
+    expect(activeProjectId(null, undefined)).toBeNull()
+  })
+})
 
 describe('buildTrendData', () => {
   it('does not fold a session from a year ago into a recent day', () => {

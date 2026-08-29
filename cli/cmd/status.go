@@ -31,8 +31,9 @@ backend, count offline queues, and fetch your last 5 telemetry logs mathematical
 			return err
 		}
 
+		cwd, _ := os.Getwd()
 		projectSlug, _ := cmd.Flags().GetString("project")
-		project, err := config.ResolveProject(cfg, projectSlug, "")
+		project, err := config.ResolveProjectForDir(cfg, projectSlug, cwd)
 		if err != nil {
 			return err
 		}
@@ -77,7 +78,7 @@ backend, count offline queues, and fetch your last 5 telemetry logs mathematical
 		fmt.Fprintln(w, "TIMESTAMP\tAGENT\tSTATUS\tSCORE")
 		
 		for _, s := range recent.Sessions {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%.1f\n", s.StartedAt, s.Agent, s.Status, s.Score)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.StartedAt, s.Agent, s.Status, formatScore(s.Score))
 		}
 		w.Flush()
 		fmt.Println()
@@ -89,6 +90,15 @@ backend, count offline queues, and fetch your last 5 telemetry logs mathematical
 func init() {
 	statusCmd.Flags().StringP("project", "p", "", "Explicitly override the mapped project context")
 	RegisterCommand(statusCmd)
+}
+
+// formatScore renders a nullable session score. An unscored session (queued /
+// failed / skipped → nil) shows "—" rather than a misleading 0.0.
+func formatScore(score *float64) string {
+	if score == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.1f", *score)
 }
 
 func offlineQueueCount(dir string) int {

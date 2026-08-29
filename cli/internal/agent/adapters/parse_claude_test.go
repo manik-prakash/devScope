@@ -61,9 +61,10 @@ func TestClaudeAdapter_ParseSessionFile(t *testing.T) {
 		t.Fatalf("ParseSessionFile failed: %v", err)
 	}
 
-	// Session ID from native field.
-	if session.SessionID != "sess-abc-123" {
-		t.Errorf("SessionID: got %q, want %q", session.SessionID, "sess-abc-123")
+	// Native session id "sess-abc-123" is not a UUID; it must be coerced to one
+	// the backend accepts, deterministically.
+	if !zodUUIDRegex.MatchString(session.SessionID) {
+		t.Errorf("SessionID %q is not a Zod-acceptable UUID", session.SessionID)
 	}
 
 	// Agent.
@@ -180,13 +181,12 @@ func TestClaudeAdapter_FallbackSessionID(t *testing.T) {
 		t.Fatalf("ParseSessionFile failed: %v", err)
 	}
 
-	// Session ID should be a sha256-derived hex string.
+	// Session ID should be a deterministic UUID the backend will accept.
 	if session.SessionID == "" {
 		t.Error("SessionID should not be empty")
 	}
-	if len(session.SessionID) != 32 {
-		t.Errorf("fallback SessionID should be 32 hex chars, got %d: %q",
-			len(session.SessionID), session.SessionID)
+	if !zodUUIDRegex.MatchString(session.SessionID) {
+		t.Errorf("fallback SessionID should be a Zod-acceptable UUID, got %q", session.SessionID)
 	}
 
 	// Messages should still be parsed.
@@ -338,9 +338,9 @@ func TestDeriveSessionID(t *testing.T) {
 		t.Error("different input should produce different ID")
 	}
 
-	// Should be 32 hex chars.
-	if len(id1) != 32 {
-		t.Errorf("ID length: got %d, want 32", len(id1))
+	// Should be a Zod-acceptable UUID.
+	if !zodUUIDRegex.MatchString(id1) {
+		t.Errorf("derived ID is not a Zod-acceptable UUID: %q", id1)
 	}
 }
 

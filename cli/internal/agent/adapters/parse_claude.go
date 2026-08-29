@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -198,9 +197,11 @@ func (a *ClaudeAdapter) ParseSessionFile(filePath string) (*NormalizedSession, e
 		return nil, fmt.Errorf("error reading session file %s: %w", filePath, err)
 	}
 
-	// Derive session ID.
+	// Derive session ID. A native id is used only if it is already a valid UUID;
+	// otherwise it (or the file path) is hashed into a deterministic UUID the
+	// backend will accept.
 	if nativeSessionID != "" {
-		session.SessionID = nativeSessionID
+		session.SessionID = normalizeSessionID(nativeSessionID)
 	} else {
 		session.SessionID = deriveSessionID(filePath, firstTimestamp)
 	}
@@ -496,13 +497,10 @@ func parseTimestamp(ts string) time.Time {
 	return time.Time{}
 }
 
-// deriveSessionID generates a deterministic session ID from the file
-// path and start time using SHA-256, as a fallback when the native
-// sessionId field is not present.
+// deriveSessionID generates a deterministic RFC 4122 UUID from the file path and
+// start time, as a fallback when the native sessionId field is not present.
 func deriveSessionID(filePath string, startedAt time.Time) string {
-	input := filePath + "|" + startedAt.Format(time.RFC3339)
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("%x", hash[:16]) // 32 hex chars
+	return deriveUUIDv8(filePath + "|" + startedAt.Format(time.RFC3339))
 }
 
 // setToSlice converts a map[string]bool set to a sorted slice.
