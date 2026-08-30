@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Key, Plus } from 'lucide-react'
+import { Key, Plus, AlertTriangle } from 'lucide-react'
 import { EmptyState, PageHeader } from '@/components/shared'
 import { ApiKeyTable } from '@/components/developer/ApiKeyTable'
 import { GenerateKeyModal } from '@/components/developer/GenerateKeyModal'
@@ -10,7 +10,7 @@ import { useApiKeys, API_KEYS_QUERY_KEY } from '@/lib/queries/keys'
 
 export default function ApiKeysPage() {
   const [showModal, setShowModal] = useState(false)
-  const { data: keys, isLoading } = useApiKeys()
+  const { data: keys, isLoading, isError } = useApiKeys()
   const queryClient = useQueryClient()
 
   async function handleCreated() {
@@ -43,6 +43,12 @@ export default function ApiKeysPage() {
         <div
           className="h-48 animate-pulse rounded border"
           style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        />
+      ) : isError ? (
+        <EmptyState
+          icon={AlertTriangle}
+          heading="Couldn’t load your API keys"
+          subtext="Something went wrong reaching the server. Refresh to try again."
         />
       ) : !keys || keys.length === 0 ? (
         <EmptyState

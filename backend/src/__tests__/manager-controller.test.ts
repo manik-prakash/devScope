@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { getUserById, getSessions, getSessionById, addProjectMember } from '../controllers/manager.js';
 import { mockReq, mockRes } from './helpers/http.js';
+
+const P2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+  code: 'P2002',
+  clientVersion: 'test',
+});
 
 describe('getUserById', () => {
   const user = {
@@ -234,5 +240,28 @@ describe('addProjectMember — seat enforcement (new user)', () => {
     await addProjectMember(r, res);
     expect(res.statusCode).toBe(201);
     expect(count).not.toHaveBeenCalled();
+  });
+
+  it('maps a lost projectId_userId race (P2002) to 409 ALREADY_MEMBER, not 500', async () => {
+    const r = mockReq({
+      params: { projectId: 'p1' },
+      body: { name: 'Dev', email: 'dev@acme.com' },
+      user: { userId: 'mgr-1', orgId: 'org-acme', role: 'MANAGER' },
+      prisma: {
+        project: { findFirst: vi.fn().mockResolvedValue({ id: 'p1', orgId: 'org-acme', members: [{ userId: 'mgr-1' }] }) },
+        user: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'u-existing', name: 'Dev', email: 'dev@acme.com', role: 'DEVELOPER' }),
+        },
+        projectMember: {
+          findUnique: vi.fn().mockResolvedValue(null), // pre-check sees no membership; the concurrent invite commits first
+          create: vi.fn().mockRejectedValue(P2002),
+        },
+      },
+    });
+
+    await expect(addProjectMember(r, mockRes())).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'ALREADY_MEMBER',
+    });
   });
 });

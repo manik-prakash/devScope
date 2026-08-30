@@ -270,6 +270,11 @@ model RefreshToken {
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
+  /// `tokenHash` of the token this one was rotated into. Set only on rotation
+  /// (null for logout / change-password bulk revocation). Lets `/auth/refresh`
+  /// tell a concurrent multi-tab rotation from a genuine replay: a spent token
+  /// is benign only if its own successor is still live.
+  replacedByTokenHash String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

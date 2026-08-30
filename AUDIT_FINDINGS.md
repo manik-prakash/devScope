@@ -14,10 +14,19 @@ retained so earlier references still resolve — gaps are expected.
   wrote to (and deleted on cleanup) the real `~/.devscope`. **FIXED** — it now calls
   `config.SetDirForTest(dir)`; `TestAuthTestsAreIsolated` guards it.
 - **F2 — Refresh-token rotation race.** Concurrent `/auth/refresh` with one cookie could both
-  pass the `revokedAt` check and each mint a replacement. **FIXED** — rotation now runs an
-  interactive `$transaction` whose revoke is conditional (`where: { tokenHash, revokedAt:
-  null }`); `count === 0` means another request already rotated, and is handled exactly like
-  token reuse (`revokeTokenFamily` + clear cookie + 401). Shared `revokeTokenFamily` helper.
+  pass the `revokedAt` check and each mint a replacement. **FIXED** — rotation runs an
+  interactive `$transaction` with a conditional revoke (`where: { tokenHash, revokedAt:
+  null }`); only `count === 1` mints a replacement.
+  **F2-fix:** the first cut treated the race loser exactly like token reuse
+  (`revokeTokenFamily`), which revoked the *winner's* fresh token → forced logout on any
+  multi-tab refresh. A spent token presented within `ROTATION_GRACE_MS` (15 s) of its
+  revocation **whose own successor is still live** is now recognised as a concurrent refresh:
+  it gets a fresh access token; the `ds_refresh` cookie and token family are left untouched.
+  Genuine replay (outside the window, or no live successor) still triggers `revokeTokenFamily`
+  + clear + 401. **Successor scoping** (`RefreshToken.replacedByTokenHash`, set on rotation;
+  new migration `20260830000000_refresh_token_replaced_by`) means an unrelated live session —
+  or the fresh token minted by `change-password` — can no longer mask a genuine replay
+  (`hasLiveSuccessor(spentHash)`, not "any live token for the user").
 - **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counted users before
   `user.create` with no lock; concurrent invites could exceed `Organization.seats`. **FIXED**
   — `assertSeatAvailable(tx, orgId)` now takes a `SELECT id FROM organizations … FOR UPDATE`
@@ -41,12 +50,40 @@ retained so earlier references still resolve — gaps are expected.
   A claim that never reaches a terminal status is retried after `RECLAIM_AFTER_MS` (15 min).
   No migration — `evaluatedAt` doubles as the claim marker; nothing renders it for
   non-terminal rows.
+- **F8 — Developer session-detail endpoint omitted `scoreDetail`.** R-03 added the real
+  evaluator dimensions to session list/detail responses but missed
+  `developer.getSessionById` — so the drawer fell back to the stats heuristic for a developer
+  opening their own session. **FIXED** — `...scoreDetailInclude` added, matching
+  `manager.getSessionById`; new `developer-controller.test.ts` guards both developer session
+  handlers.
 - **F7 — Cross-host `NEXT_PUBLIC_API_URL` breaks the refresh cookie** (`SameSite=Lax` won't
   ride a cross-site XHR). **FIXED (docs).** `README.md` no longer tells fresh installs to set
   `NEXT_PUBLIC_API_URL` (the rewrite already targets `localhost:3001`); both READMEs now state
   the same-origin `API_PROXY_TARGET` rewrite is the supported shape and that a different-host
   `NEXT_PUBLIC_API_URL` silently drops sessions every ~15 min. A `CROSS_SITE_COOKIES` backend
   flag (`SameSite=None; Secure`) is noted as the follow-up if cross-host is ever needed.
+- **F9 — Dashboard partial API failures were hidden.** The manager `dashboard/page.tsx` fires
+  two independent `useManagerSessions` queries (500-row stats slice + 10-row table slice) but
+  only rendered the full-page error when *both* failed. A lone `statsError` left the stat
+  cards showing `0 / – / 0 / —` and empty charts; a lone `tableError` fell through to the
+  "No sessions yet" empty state. **FIXED** — `RecentSessionsTable` extracted to
+  `frontend/components/manager/RecentSessionsTable.tsx` with a new `isError` prop that renders
+  an `AlertTriangle` state ("Couldn't load recent sessions"); the page passes
+  `isError={tableError}`. On `statsError` (short of the both-failed full-page case) the stat
+  cards and charts are hidden entirely behind an amber `var(--warning)` notice, so nothing
+  reads as a real zero. New `RecentSessionsTable.test.tsx` (4 tests) guards the state ladder.
+- **F10 — API-key load failure showed "No API keys yet".** `me/api-keys/page.tsx` dropped
+  `isError` from `useApiKeys()`, so a failed fetch rendered the empty-state with a *Generate
+  new key* CTA — a user who already has keys could mint a duplicate. **FIXED** — the page now
+  consumes `isError` and renders an `AlertTriangle` "Couldn't load your API keys" state ahead
+  of the empty check, mirroring `projects/page.tsx`.
+- **F11 — Concurrent invite of an existing user returned HTTP 500.** `manager.addProjectMember`'s
+  existing-user branch did a check-then-`projectMember.create` with no P2002 handling: two
+  simultaneous invites of the same user to the same project both saw no membership, then the
+  loser of the `projectId_userId` unique race threw an unhandled `PrismaClientKnownRequestError`
+  → 500. **FIXED** — the `create` is wrapped in a try/catch that maps `P2002` to the same
+  `409 ALREADY_MEMBER` the pre-check returns (mirrors `createProject` and the fresh-user
+  branch). `manager-controller.test.ts` gains a race test asserting 409, not 500.
 
 ---
 
@@ -90,8 +127,10 @@ post-agent telemetry failure is stderr-only and never changes that code).
 ## Validation summary
 
 - CLI: `go build`, `go vet`, `go test ./...` pass.
-- Backend: type-check, lint (0 warnings), 85 tests, build pass.
-- Frontend: TypeScript, 30 tests, lint (0 errors, 28 pre-existing `react-hooks/*` warnings),
+- Backend: type-check, lint (0 warnings), 93 tests, build pass. New migration
+  `20260830000000_refresh_token_replaced_by` — apply with `pnpm db:migrate` (dev) /
+  `pnpm db:migrate:deploy` (prod).
+- Frontend: TypeScript, 34 tests, lint (0 errors, 28 pre-existing `react-hooks/*` warnings),
   and production build pass.
 - Tests remain primarily mocked/unit-level; there is no real database integration suite or
   browser end-to-end coverage.

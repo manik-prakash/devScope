@@ -165,9 +165,18 @@ export const addProjectMember = async (req: Request, res: Response) => {
     if (alreadyMember) {
       throw conflict(`${existing.name} is already a member of this project`, 'ALREADY_MEMBER');
     }
-    await req.prisma.projectMember.create({
-      data: { projectId, userId: existing.id, role: existing.role },
-    });
+    try {
+      await req.prisma.projectMember.create({
+        data: { projectId, userId: existing.id, role: existing.role },
+      });
+    } catch (err) {
+      // A concurrent invite of the same user can pass the check above and then
+      // lose the race on the projectId_userId unique — that's ALREADY_MEMBER, not a 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw conflict(`${existing.name} is already a member of this project`, 'ALREADY_MEMBER');
+      }
+      throw err;
+    }
     res.status(201).json({
       id:           existing.id,
       name:         existing.name,

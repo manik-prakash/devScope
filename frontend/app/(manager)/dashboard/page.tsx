@@ -1,19 +1,13 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Activity, AlertTriangle } from 'lucide-react'
-import { PageHeader, StatCard, ScoreBadge, AgentBadge, EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { AlertTriangle } from 'lucide-react'
+import { PageHeader, StatCard, EmptyState, SessionDetailDrawer } from '@/components/shared'
+import { RecentSessionsTable } from '@/components/manager/RecentSessionsTable'
 import { SessionVolumeChart, DeveloperBarChart } from '@/components/charts'
 import { useManagerSessions, AGGREGATE_LIMIT } from '@/lib/queries/sessions'
 import { useManagerOrg } from '@/lib/queries/projects'
-import {
-  formatDuration,
-  formatRelativeTime,
-  average,
-  mode,
-  isWithinDays,
-  lastNDayLabels,
-} from '@/lib/utils'
+import { average, mode, isWithinDays, lastNDayLabels } from '@/lib/utils'
 import type { Session } from '@/lib/types'
 
 // ─── Data helpers ─────────────────────────────────────────────────────────────
@@ -46,100 +40,6 @@ function buildDevBarData(sessions: Session[]) {
   return Object.values(devMap)
     .filter((d) => d.scores.length > 0)
     .map((d) => ({ name: d.name, score: average(d.scores) }))
-}
-
-// ─── Recent sessions table ────────────────────────────────────────────────────
-
-interface RecentSessionsTableProps {
-  sessions:            Session[]
-  isLoading:           boolean
-  onSelectSession:     (id: string) => void
-}
-
-function RecentSessionsTable({ sessions, isLoading, onSelectSession }: RecentSessionsTableProps) {
-  const COL_CLASS = 'px-4 py-3 text-sm'
-
-  if (isLoading) {
-    return (
-      <div className="space-y-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-12 animate-pulse rounded"
-            style={{ background: 'var(--surface-2)' }}
-          />
-        ))}
-      </div>
-    )
-  }
-
-  if (!sessions.length) {
-    return (
-      <EmptyState
-        icon={Activity}
-        heading="No sessions yet"
-        subtext="Sessions will appear here once developers run the CLI."
-      />
-    )
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-            {['Developer', 'Project', 'Agent', 'Score', 'Duration', 'When'].map((h) => (
-              <th
-                key={h}
-                className="px-4 pb-2 pt-0 text-left text-xs font-medium"
-                style={{ color: 'var(--text-faint)' }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sessions.map((s) => (
-            <tr
-              key={s.id}
-              className="cursor-pointer transition-colors duration-150"
-              style={{ borderBottom: '1px solid var(--border)' }}
-              onClick={() => onSelectSession(s.id)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--surface)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              <td className={COL_CLASS} style={{ color: 'var(--text)' }}>
-                {s.user?.name ?? '—'}
-              </td>
-              <td className={COL_CLASS} style={{ color: 'var(--text-muted)' }}>
-                {s.project?.name ?? '—'}
-              </td>
-              <td className={COL_CLASS}>
-                <AgentBadge agent={s.agent} />
-              </td>
-              <td className={COL_CLASS}>
-                <ScoreBadge score={s.score} />
-              </td>
-              <td
-                className={`${COL_CLASS} font-mono`}
-                style={{ color: 'var(--text-muted)' }}
-              >
-                {formatDuration(s.durationMs)}
-              </td>
-              <td className={COL_CLASS} style={{ color: 'var(--text-faint)' }}>
-                {formatRelativeTime(s.createdAt)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -214,69 +114,79 @@ export default function DashboardPage() {
         subtitle={org ? org.name : undefined}
       />
 
-      {allSessions.length >= AGGREGATE_LIMIT && (
-        <p className="-mt-4 text-xs" style={{ color: 'var(--text-faint)' }}>
-          Stats and charts are based on the {AGGREGATE_LIMIT.toLocaleString()} most recent sessions.
+      {statsError ? (
+        <p className="-mt-4 text-xs" style={{ color: 'var(--warning)' }}>
+          Couldn’t load session stats — the cards and charts below are hidden until you refresh.
         </p>
+      ) : (
+        allSessions.length >= AGGREGATE_LIMIT && (
+          <p className="-mt-4 text-xs" style={{ color: 'var(--text-faint)' }}>
+            Stats and charts are based on the {AGGREGATE_LIMIT.toLocaleString()} most recent sessions.
+          </p>
+        )
       )}
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="Sessions this week"
-          value={stats.sessionsThisWeek}
-          delta={stats.sessionsDelta}
-          deltaLabel="vs last week"
-          isLoading={statsLoading}
-        />
-        <StatCard
-          label="Org avg score"
-          value={stats.avgScore !== null ? Math.round(stats.avgScore) : '–'}
-          delta={stats.scoreDelta}
-          deltaLabel="vs last week"
-          isLoading={statsLoading}
-        />
-        <StatCard
-          label="Active developers"
-          value={stats.activeDev}
-          isLoading={statsLoading}
-        />
-        <StatCard
-          label="Most used agent"
-          value={stats.topAgent}
-          mono={false}
-          isLoading={statsLoading}
-        />
-      </div>
+      {!statsError && (
+        <>
+          {/* ── Stat cards ── */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard
+              label="Sessions this week"
+              value={stats.sessionsThisWeek}
+              delta={stats.sessionsDelta}
+              deltaLabel="vs last week"
+              isLoading={statsLoading}
+            />
+            <StatCard
+              label="Org avg score"
+              value={stats.avgScore !== null ? Math.round(stats.avgScore) : '–'}
+              delta={stats.scoreDelta}
+              deltaLabel="vs last week"
+              isLoading={statsLoading}
+            />
+            <StatCard
+              label="Active developers"
+              value={stats.activeDev}
+              isLoading={statsLoading}
+            />
+            <StatCard
+              label="Most used agent"
+              value={stats.topAgent}
+              mono={false}
+              isLoading={statsLoading}
+            />
+          </div>
 
-      {/* ── Charts ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div
-          className="rounded border p-6"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          <p className="mb-4 text-sm font-medium" style={{ color: 'var(--text)' }}>
-            Session volume
-            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-faint)' }}>
-              last 30 days
-            </span>
-          </p>
-          <SessionVolumeChart data={volumeData} height={200} isLoading={statsLoading} />
-        </div>
+          {/* ── Charts ── */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div
+              className="rounded border p-6"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              <p className="mb-4 text-sm font-medium" style={{ color: 'var(--text)' }}>
+                Session volume
+                <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-faint)' }}>
+                  last 30 days
+                </span>
+              </p>
+              <SessionVolumeChart data={volumeData} height={200} isLoading={statsLoading} />
+            </div>
 
-        <div
-          className="rounded border p-6"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          <p className="mb-4 text-sm font-medium" style={{ color: 'var(--text)' }}>
-            Avg score by developer
-            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-faint)' }}>
-              top 8
-            </span>
-          </p>
-          <DeveloperBarChart data={devBarData} height={200} isLoading={statsLoading} />
-        </div>
-      </div>
+            <div
+              className="rounded border p-6"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              <p className="mb-4 text-sm font-medium" style={{ color: 'var(--text)' }}>
+                Avg score by developer
+                <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-faint)' }}>
+                  top 8
+                </span>
+              </p>
+              <DeveloperBarChart data={devBarData} height={200} isLoading={statsLoading} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Recent sessions table ── */}
       <div
@@ -298,6 +208,7 @@ export default function DashboardPage() {
         <RecentSessionsTable
           sessions={tableSessions}
           isLoading={tableLoading}
+          isError={tableError}
           onSelectSession={setSelectedSessionId}
         />
       </div>

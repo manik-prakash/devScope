@@ -53,6 +53,7 @@ export const getSessionById = async (req: Request, res: Response) => {
     where: { id: req.params['sessionId'] as string },
     include: {
       project: { select: { name: true, slug: true } },
+      ...scoreDetailInclude,
     }
   });
 

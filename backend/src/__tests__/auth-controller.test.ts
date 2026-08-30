@@ -176,16 +176,35 @@ describe('refresh', () => {
 
   function reqWith(
     storedToken: unknown,
-    { rotateCount = 1, extra = {} }: { rotateCount?: number; extra?: Record<string, unknown> } = {},
+    {
+      rotateCount = 1,
+      successorLive = false,
+      spentReadback,
+      extra = {},
+    }: {
+      rotateCount?: number;
+      successorLive?: boolean;
+      spentReadback?: unknown;
+      extra?: Record<string, unknown>;
+    } = {},
   ) {
+    // `refresh` re-reads the token on the lost-race path to pick up the successor
+    // link the winner just set; `spentReadback` is that second read.
+    const findUnique =
+      spentReadback === undefined
+        ? vi.fn().mockResolvedValue(storedToken)
+        : vi.fn().mockResolvedValueOnce(storedToken).mockResolvedValue(spentReadback);
+
     return mockReq({
       cookies: { ds_refresh: 'the-raw-token' },
       prisma: {
         refreshToken: {
-          findUnique: vi.fn().mockResolvedValue(storedToken),
+          findUnique,
           create: vi.fn().mockResolvedValue({}),
-          // family revoke (reuse / lost-race path)
+          // family revoke (reuse / no-successor path)
           updateMany: vi.fn().mockResolvedValue({ count: 3 }),
+          // hasLiveSuccessor(): 1 = the spent token's own successor is still live.
+          count: vi.fn().mockResolvedValue(successorLive ? 1 : 0),
         },
         // interactive form: run the callback with a tx client whose conditional
         // revoke reports `rotateCount` rows touched (0 = this request lost the race).
@@ -231,11 +250,12 @@ describe('refresh', () => {
   it('detects reuse of a spent token: revokes the whole family, clears the cookie, 401', async () => {
     const req = reqWith({
       tokenHash: sha256('the-raw-token'),
-      revokedAt: new Date(Date.now() - 1000), // already revoked
+      revokedAt: new Date(Date.now() - 60_000), // revoked well outside the rotation grace window
+      replacedByTokenHash: 'successor-hash',
       expiresAt: new Date(Date.now() + 86_400_000),
       userId: 'u-acme',
       user: userRow,
-    });
+    }); // successorLive: false — the successor is gone too, so this is a genuine replay
     const res = mockRes();
 
     await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
@@ -247,7 +267,83 @@ describe('refresh', () => {
     expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
   });
 
-  it('treats a lost rotation race like reuse: revokes the family, clears the cookie, 401', async () => {
+  it('a recently-revoked token whose own successor is live → 200 + access token, family untouched', async () => {
+    const req = reqWith(
+      {
+        tokenHash: sha256('the-raw-token'),
+        revokedAt: new Date(Date.now() - 500), // a sibling tab rotated it moments ago
+        replacedByTokenHash: 'successor-hash',
+        expiresAt: new Date(Date.now() + 86_400_000),
+        userId: 'u-acme',
+        user: userRow,
+      },
+      { successorLive: true },
+    );
+    const res = mockRes();
+
+    await refresh(req, res);
+
+    expect(typeof (res.body as Record<string, unknown>).accessToken).toBe('string');
+    expect(res.cookies.some((c) => c.name === 'ds_refresh')).toBe(false); // cookie left alone
+    expect(res.clearedCookies).toHaveLength(0);
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).not.toHaveBeenCalled(); // no family revoke
+  });
+
+  it('a token bulk-revoked (no successor link) is NOT masked by an unrelated live token → 401', async () => {
+    // e.g. change-password revoked the family then minted a new token for the
+    // current session. `successorLive` is true but the spent token has no
+    // successor of its own, so it must still be treated as reuse.
+    const req = reqWith(
+      {
+        tokenHash: sha256('the-raw-token'),
+        revokedAt: new Date(Date.now() - 500),
+        replacedByTokenHash: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        userId: 'u-acme',
+        user: userRow,
+      },
+      { successorLive: true },
+    );
+    const res = mockRes();
+
+    await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'u-acme' }) }),
+    );
+  });
+
+  it('a lost rotation race whose successor is live → 200 + access token, cookie & family untouched', async () => {
+    const req = reqWith(
+      {
+        tokenHash: sha256('the-raw-token'),
+        revokedAt: null, // still active at our findUnique
+        expiresAt: new Date(Date.now() + 86_400_000),
+        userId: 'u-acme',
+        user: userRow,
+      },
+      {
+        rotateCount: 0, // lost the conditional revoke
+        successorLive: true,
+        spentReadback: {
+          replacedByTokenHash: 'successor-hash',
+          revokedAt: new Date(Date.now() - 200), // the winner revoked it moments ago
+        },
+      },
+    );
+    const res = mockRes();
+
+    await refresh(req, res);
+
+    expect(typeof (res.body as Record<string, unknown>).accessToken).toBe('string');
+    expect(res.cookies.some((c) => c.name === 'ds_refresh')).toBe(false);
+    expect(res.clearedCookies).toHaveLength(0);
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a lost rotation race with no live successor → 401 + family revoke', async () => {
     const req = reqWith(
       {
         tokenHash: sha256('the-raw-token'),
@@ -256,7 +352,11 @@ describe('refresh', () => {
         userId: 'u-acme',
         user: userRow,
       },
-      { rotateCount: 0 }, // conditional revoke matched nothing — another request already rotated this token
+      {
+        rotateCount: 0,
+        successorLive: false,
+        spentReadback: { replacedByTokenHash: null, revokedAt: new Date(Date.now() - 200) },
+      },
     );
     const res = mockRes();
 

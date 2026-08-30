@@ -32,8 +32,13 @@ function clearRefreshCookie(res: Response): void {
   res.clearCookie(REFRESH_COOKIE, { path: '/' });
 }
 
-// Revoke every still-active refresh token for a user. Used whenever a spent
-// token is presented again — either an explicit replay or a lost rotation race.
+// A spent token presented within this window of its revocation, while the user
+// still has a live refresh token, is a concurrent refresh (e.g. two browser
+// tabs) rather than a replay — the "leeway" of refresh-token reuse detection.
+const ROTATION_GRACE_MS = 15_000;
+
+// Revoke every still-active refresh token for a user — the reuse-detection
+// response to a genuine replay.
 async function revokeTokenFamily(
   prisma: Pick<PrismaClient, 'refreshToken'>,
   userId: string,
@@ -42,6 +47,26 @@ async function revokeTokenFamily(
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+}
+
+// True when the spent token's *own* successor (the token a concurrent rotation
+// of THIS token minted) is still live. Scoped to the successor — not "any live
+// token for the user" — so an unrelated session or a post-change-password token
+// can't mask a genuine replay.
+async function hasLiveSuccessor(
+  prisma: Pick<PrismaClient, 'refreshToken'>,
+  successorHash: string | null | undefined,
+): Promise<boolean> {
+  if (!successorHash) return false;
+  const n = await prisma.refreshToken.count({
+    where: { tokenHash: successorHash, revokedAt: null, expiresAt: { gt: new Date() } },
+  });
+  return n > 0;
+}
+
+function signAccessToken(user: Pick<User, 'id' | 'orgId' | 'role'>): string {
+  const signOptions: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as any };
+  return jwt.sign({ sub: user.id, orgId: user.orgId, role: user.role }, env.JWT_SECRET, signOptions);
 }
 
 function newRefreshToken(): { raw: string; hash: string; expiresAt: Date } {
@@ -57,13 +82,7 @@ interface IssuedTokens {
 }
 
 async function issueTokens(user: Pick<User, 'id' | 'orgId' | 'role'>, prisma: PrismaClient): Promise<IssuedTokens> {
-  const signOptions: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as any };
-
-  const accessToken = jwt.sign(
-    { sub: user.id, orgId: user.orgId, role: user.role },
-    env.JWT_SECRET,
-    signOptions,
-  );
+  const accessToken = signAccessToken(user);
 
   const { raw, hash, expiresAt } = newRefreshToken();
   await prisma.refreshToken.create({
@@ -115,8 +134,23 @@ export const refresh = async (req: Request, res: Response) => {
     throw unauthorized('Invalid or expired refresh token');
   }
 
+  // A spent token: distinguish a genuine replay from a concurrent refresh
+  // (another tab rotated it moments ago and a live successor exists). The latter
+  // gets a fresh access token but no rotation — the sibling response already set
+  // the live `ds_refresh` in the shared cookie jar.
+  const grantConcurrentRefresh = () => {
+    res.json(
+      authBody(signAccessToken(stored.user), env.JWT_EXPIRES_IN, stored.user, stored.user.mustChangePass),
+    );
+  };
+
   if (stored.revokedAt) {
-    // A spent token was replayed — assume theft and revoke the whole family.
+    const withinGrace = Date.now() - stored.revokedAt.getTime() < ROTATION_GRACE_MS;
+    if (withinGrace && (await hasLiveSuccessor(req.prisma, stored.replacedByTokenHash))) {
+      grantConcurrentRefresh();
+      return;
+    }
+    // Genuine replay — assume theft and revoke the whole family.
     await revokeTokenFamily(req.prisma, stored.userId);
     clearRefreshCookie(res);
     throw unauthorized('Refresh token reuse detected — please sign in again');
@@ -125,13 +159,12 @@ export const refresh = async (req: Request, res: Response) => {
   // Rotate atomically: revoke the presented token *only if it is still active*
   // (`revokedAt: null` in the WHERE), then mint its replacement. Two concurrent
   // refreshes with the same cookie both reach here; Postgres re-checks the WHERE
-  // under the row lock so exactly one gets `count === 1`. The loser (`count ===
-  // 0`) is treated like replaying a spent token.
+  // under the row lock so exactly one gets `count === 1`.
   const next = newRefreshToken();
   const rotated = await req.prisma.$transaction(async (tx) => {
     const revoked = await tx.refreshToken.updateMany({
       where: { tokenHash, revokedAt: null },
-      data: { revokedAt: new Date() },
+      data: { revokedAt: new Date(), replacedByTokenHash: next.hash },
     });
     if (revoked.count === 0) return false;
     await tx.refreshToken.create({
@@ -141,20 +174,29 @@ export const refresh = async (req: Request, res: Response) => {
   });
 
   if (!rotated) {
+    // Lost the conditional revoke: the token was spent between our findUnique
+    // and our updateMany. Re-read its now-set successor link + revocation time;
+    // it's the benign multi-tab case only if that successor is live and the
+    // revocation is within the grace window.
+    const spent = await req.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      select: { replacedByTokenHash: true, revokedAt: true },
+    });
+    const withinGrace =
+      !!spent?.revokedAt && Date.now() - spent.revokedAt.getTime() < ROTATION_GRACE_MS;
+    if (withinGrace && (await hasLiveSuccessor(req.prisma, spent?.replacedByTokenHash))) {
+      grantConcurrentRefresh();
+      return;
+    }
     await revokeTokenFamily(req.prisma, stored.userId);
     clearRefreshCookie(res);
     throw unauthorized('Refresh token reuse detected — please sign in again');
   }
 
-  const signOptions: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as any };
-  const accessToken = jwt.sign(
-    { sub: stored.userId, orgId: stored.user.orgId, role: stored.user.role },
-    env.JWT_SECRET,
-    signOptions,
-  );
-
   setRefreshCookie(res, next.raw, next.expiresAt);
-  res.json(authBody(accessToken, env.JWT_EXPIRES_IN, stored.user, stored.user.mustChangePass));
+  res.json(
+    authBody(signAccessToken(stored.user), env.JWT_EXPIRES_IN, stored.user, stored.user.mustChangePass),
+  );
 };
 
 export const logout = async (req: Request, res: Response) => {
