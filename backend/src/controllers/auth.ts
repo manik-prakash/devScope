@@ -32,10 +32,12 @@ function clearRefreshCookie(res: Response): void {
   res.clearCookie(REFRESH_COOKIE, { path: '/' });
 }
 
-// A spent token presented within this window of its revocation, while the user
-// still has a live refresh token, is a concurrent refresh (e.g. two browser
-// tabs) rather than a replay — the "leeway" of refresh-token reuse detection.
-const ROTATION_GRACE_MS = 15_000;
+// The "leeway" window of refresh-token reuse detection. A token that was revoked
+// *by rotation* and re-presented within this window is a concurrent refresh
+// (browser waking with several tabs, a mobile retry) — not a replay. 30s matches
+// the Okta / Auth0 default; larger cuts false logouts on slow networks, smaller
+// tightens the replay window.
+const ROTATION_GRACE_MS = 30_000;
 
 // Revoke every still-active refresh token for a user — the reuse-detection
 // response to a genuine replay.
@@ -49,19 +51,19 @@ async function revokeTokenFamily(
   });
 }
 
-// True when the spent token's *own* successor (the token a concurrent rotation
-// of THIS token minted) is still live. Scoped to the successor — not "any live
-// token for the user" — so an unrelated session or a post-change-password token
-// can't mask a genuine replay.
-async function hasLiveSuccessor(
-  prisma: Pick<PrismaClient, 'refreshToken'>,
-  successorHash: string | null | undefined,
-): Promise<boolean> {
-  if (!successorHash) return false;
-  const n = await prisma.refreshToken.count({
-    where: { tokenHash: successorHash, revokedAt: null, expiresAt: { gt: new Date() } },
-  });
-  return n > 0;
+// A spent token is a benign concurrent refresh (not a replay) iff it was revoked
+// *by rotation* — `replacedByTokenHash` is set — within the grace window. We do
+// NOT check whether that successor is still live: the chain may have rotated
+// again in the same window (T0→T1→T2), and a straggler still holding T0 is just
+// as benign as one holding T1. `replacedByTokenHash === null` means the token was
+// killed by logout / change-password, which is always a hard stop. This matches
+// how Okta / Auth0 / better-auth reconcile a grace period with reuse detection.
+function isConcurrentRefresh(
+  revokedAt: Date | null | undefined,
+  replacedByTokenHash: string | null | undefined,
+): boolean {
+  if (!revokedAt || !replacedByTokenHash) return false;
+  return Date.now() - revokedAt.getTime() < ROTATION_GRACE_MS;
 }
 
 function signAccessToken(user: Pick<User, 'id' | 'orgId' | 'role'>): string {
@@ -135,9 +137,11 @@ export const refresh = async (req: Request, res: Response) => {
   }
 
   // A spent token: distinguish a genuine replay from a concurrent refresh
-  // (another tab rotated it moments ago and a live successor exists). The latter
-  // gets a fresh access token but no rotation — the sibling response already set
-  // the live `ds_refresh` in the shared cookie jar.
+  // (another tab rotated it moments ago). The latter gets a fresh access token
+  // but no rotation — the sibling response already set the live `ds_refresh` in
+  // the shared cookie jar. Note: a non-cookie caller (a body `refreshToken`, i.e.
+  // tests) that races itself lands here and gets an access token but no refreshed
+  // credential; only the cookie flow is supported for concurrent refresh.
   const grantConcurrentRefresh = () => {
     res.json(
       authBody(signAccessToken(stored.user), env.JWT_EXPIRES_IN, stored.user, stored.user.mustChangePass),
@@ -145,12 +149,12 @@ export const refresh = async (req: Request, res: Response) => {
   };
 
   if (stored.revokedAt) {
-    const withinGrace = Date.now() - stored.revokedAt.getTime() < ROTATION_GRACE_MS;
-    if (withinGrace && (await hasLiveSuccessor(req.prisma, stored.replacedByTokenHash))) {
+    if (isConcurrentRefresh(stored.revokedAt, stored.replacedByTokenHash)) {
       grantConcurrentRefresh();
       return;
     }
-    // Genuine replay — assume theft and revoke the whole family.
+    // Genuine replay (revoked outside the grace window, or killed by logout /
+    // change-password) — assume theft and revoke the whole family.
     await revokeTokenFamily(req.prisma, stored.userId);
     clearRefreshCookie(res);
     throw unauthorized('Refresh token reuse detected — please sign in again');
@@ -175,16 +179,14 @@ export const refresh = async (req: Request, res: Response) => {
 
   if (!rotated) {
     // Lost the conditional revoke: the token was spent between our findUnique
-    // and our updateMany. Re-read its now-set successor link + revocation time;
-    // it's the benign multi-tab case only if that successor is live and the
-    // revocation is within the grace window.
+    // and our updateMany. Re-read its now-set successor link + revocation time —
+    // it's the benign multi-tab case only if it was revoked by rotation inside
+    // the grace window.
     const spent = await req.prisma.refreshToken.findUnique({
       where: { tokenHash },
       select: { replacedByTokenHash: true, revokedAt: true },
     });
-    const withinGrace =
-      !!spent?.revokedAt && Date.now() - spent.revokedAt.getTime() < ROTATION_GRACE_MS;
-    if (withinGrace && (await hasLiveSuccessor(req.prisma, spent?.replacedByTokenHash))) {
+    if (isConcurrentRefresh(spent?.revokedAt, spent?.replacedByTokenHash)) {
       grantConcurrentRefresh();
       return;
     }

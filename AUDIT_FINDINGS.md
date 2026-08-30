@@ -19,14 +19,22 @@ retained so earlier references still resolve — gaps are expected.
   null }`); only `count === 1` mints a replacement.
   **F2-fix:** the first cut treated the race loser exactly like token reuse
   (`revokeTokenFamily`), which revoked the *winner's* fresh token → forced logout on any
-  multi-tab refresh. A spent token presented within `ROTATION_GRACE_MS` (15 s) of its
-  revocation **whose own successor is still live** is now recognised as a concurrent refresh:
-  it gets a fresh access token; the `ds_refresh` cookie and token family are left untouched.
-  Genuine replay (outside the window, or no live successor) still triggers `revokeTokenFamily`
-  + clear + 401. **Successor scoping** (`RefreshToken.replacedByTokenHash`, set on rotation;
-  new migration `20260830000000_refresh_token_replaced_by`) means an unrelated live session —
-  or the fresh token minted by `change-password` — can no longer mask a genuine replay
-  (`hasLiveSuccessor(spentHash)`, not "any live token for the user").
+  multi-tab refresh. **Grace window:** a spent token re-presented within `ROTATION_GRACE_MS`
+  (30 s — the Okta / Auth0 default) is a concurrent refresh **iff it was revoked by rotation**,
+  i.e. `RefreshToken.replacedByTokenHash` is set (new migration
+  `20260830000000_refresh_token_replaced_by`). It gets a fresh access token; the `ds_refresh`
+  cookie and token family are left untouched. A `null` link means the token was killed by
+  logout / `change-password` — always a hard stop. Revoked outside the window → `revokeTokenFamily`
+  + clear + 401. **Review follow-up (Finding 1):** the intermediate cut also checked that the
+  spent token's *immediate* successor was still live; a chain that rotated twice inside the
+  window (`T0→T1→T2`) then let a straggler holding `T0` see `T1` already revoked and nuke the
+  live `T2`. The successor-liveness check is dropped — `replacedByTokenHash IS NOT NULL` +
+  within-window is sufficient and matches how Okta / Auth0 / better-auth reconcile a grace
+  period with reuse detection. The scoping concern from the earlier security review still
+  holds: the check is "was *this* token recently rotated", never "does the user have *any*
+  live token". **Finding 2:** a non-cookie caller (body `refreshToken`, tests only) that races
+  itself gets an access token but no refreshed credential on the concurrent-refresh path —
+  documented in a comment; only the cookie flow is supported for concurrent refresh.
 - **F3 — Seat-limit concurrent oversubscription.** `assertSeatAvailable` counted users before
   `user.create` with no lock; concurrent invites could exceed `Organization.seats`. **FIXED**
   — `assertSeatAvailable(tx, orgId)` now takes a `SELECT id FROM organizations … FOR UPDATE`
@@ -72,11 +80,16 @@ retained so earlier references still resolve — gaps are expected.
   `isError={tableError}`. On `statsError` (short of the both-failed full-page case) the stat
   cards and charts are hidden entirely behind an amber `var(--warning)` notice, so nothing
   reads as a real zero. New `RecentSessionsTable.test.tsx` (4 tests) guards the state ladder.
+  **Review follow-up:** the "Recent sessions" header no longer renders "0 total" next to the
+  table's own error state — the count is hidden while `tableError`.
 - **F10 — API-key load failure showed "No API keys yet".** `me/api-keys/page.tsx` dropped
   `isError` from `useApiKeys()`, so a failed fetch rendered the empty-state with a *Generate
   new key* CTA — a user who already has keys could mint a duplicate. **FIXED** — the page now
   consumes `isError` and renders an `AlertTriangle` "Couldn't load your API keys" state ahead
-  of the empty check, mirroring `projects/page.tsx`.
+  of the empty check, mirroring `projects/page.tsx`. **Review follow-up:** the header
+  *Generate new key* button is also suppressed in the `isError` state
+  (`action={isError ? undefined : generateButton}`), so the duplicate-key hazard isn't
+  reachable from the error screen either.
 - **F11 — Concurrent invite of an existing user returned HTTP 500.** `manager.addProjectMember`'s
   existing-user branch did a check-then-`projectMember.create` with no P2002 handling: two
   simultaneous invites of the same user to the same project both saw no membership, then the
@@ -127,7 +140,7 @@ post-agent telemetry failure is stderr-only and never changes that code).
 ## Validation summary
 
 - CLI: `go build`, `go vet`, `go test ./...` pass.
-- Backend: type-check, lint (0 warnings), 93 tests, build pass. New migration
+- Backend: type-check, lint (0 warnings), 94 tests, build pass. New migration
   `20260830000000_refresh_token_replaced_by` — apply with `pnpm db:migrate` (dev) /
   `pnpm db:migrate:deploy` (prod).
 - Frontend: TypeScript, 34 tests, lint (0 errors, 28 pre-existing `react-hooks/*` warnings),

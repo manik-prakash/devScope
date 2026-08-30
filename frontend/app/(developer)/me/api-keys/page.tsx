@@ -36,7 +36,7 @@ export default function ApiKeysPage() {
       <PageHeader
         title="API Keys"
         subtitle="Keys authenticate the DevScope CLI to your account."
-        action={generateButton}
+        action={isError ? undefined : generateButton}
       />
 
       {isLoading ? (

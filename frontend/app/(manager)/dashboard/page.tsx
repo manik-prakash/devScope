@@ -200,9 +200,11 @@ export default function DashboardPage() {
           <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
             Recent sessions
           </p>
-          <span className="font-mono text-xs" style={{ color: 'var(--text-faint)' }}>
-            {tableData?.pagination.total ?? 0} total
-          </span>
+          {!tableError && (
+            <span className="font-mono text-xs" style={{ color: 'var(--text-faint)' }}>
+              {tableData?.pagination.total ?? 0} total
+            </span>
+          )}
         </div>
 
         <RecentSessionsTable

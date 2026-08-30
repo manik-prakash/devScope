@@ -178,12 +178,10 @@ describe('refresh', () => {
     storedToken: unknown,
     {
       rotateCount = 1,
-      successorLive = false,
       spentReadback,
       extra = {},
     }: {
       rotateCount?: number;
-      successorLive?: boolean;
       spentReadback?: unknown;
       extra?: Record<string, unknown>;
     } = {},
@@ -201,10 +199,8 @@ describe('refresh', () => {
         refreshToken: {
           findUnique,
           create: vi.fn().mockResolvedValue({}),
-          // family revoke (reuse / no-successor path)
+          // family revoke (reuse / outside-grace path)
           updateMany: vi.fn().mockResolvedValue({ count: 3 }),
-          // hasLiveSuccessor(): 1 = the spent token's own successor is still live.
-          count: vi.fn().mockResolvedValue(successorLive ? 1 : 0),
         },
         // interactive form: run the callback with a tx client whose conditional
         // revoke reports `rotateCount` rows touched (0 = this request lost the race).
@@ -251,11 +247,11 @@ describe('refresh', () => {
     const req = reqWith({
       tokenHash: sha256('the-raw-token'),
       revokedAt: new Date(Date.now() - 60_000), // revoked well outside the rotation grace window
-      replacedByTokenHash: 'successor-hash',
+      replacedByTokenHash: 'successor-hash',    // rotated, but too long ago — treat as replay
       expiresAt: new Date(Date.now() + 86_400_000),
       userId: 'u-acme',
       user: userRow,
-    }); // successorLive: false — the successor is gone too, so this is a genuine replay
+    });
     const res = mockRes();
 
     await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
@@ -267,18 +263,15 @@ describe('refresh', () => {
     expect(res.clearedCookies.some((c) => c.name === 'ds_refresh')).toBe(true);
   });
 
-  it('a recently-revoked token whose own successor is live → 200 + access token, family untouched', async () => {
-    const req = reqWith(
-      {
-        tokenHash: sha256('the-raw-token'),
-        revokedAt: new Date(Date.now() - 500), // a sibling tab rotated it moments ago
-        replacedByTokenHash: 'successor-hash',
-        expiresAt: new Date(Date.now() + 86_400_000),
-        userId: 'u-acme',
-        user: userRow,
-      },
-      { successorLive: true },
-    );
+  it('a token rotated moments ago (replacedByTokenHash set, within grace) → 200 + access token, family untouched', async () => {
+    const req = reqWith({
+      tokenHash: sha256('the-raw-token'),
+      revokedAt: new Date(Date.now() - 500), // a sibling tab rotated it moments ago
+      replacedByTokenHash: 'successor-hash',
+      expiresAt: new Date(Date.now() + 86_400_000),
+      userId: 'u-acme',
+      user: userRow,
+    });
     const res = mockRes();
 
     await refresh(req, res);
@@ -290,21 +283,41 @@ describe('refresh', () => {
     expect(rt.updateMany).not.toHaveBeenCalled(); // no family revoke
   });
 
-  it('a token bulk-revoked (no successor link) is NOT masked by an unrelated live token → 401', async () => {
-    // e.g. change-password revoked the family then minted a new token for the
-    // current session. `successorLive` is true but the spent token has no
-    // successor of its own, so it must still be treated as reuse.
-    const req = reqWith(
-      {
-        tokenHash: sha256('the-raw-token'),
-        revokedAt: new Date(Date.now() - 500),
-        replacedByTokenHash: null,
-        expiresAt: new Date(Date.now() + 86_400_000),
-        userId: 'u-acme',
-        user: userRow,
-      },
-      { successorLive: true },
-    );
+  it('a straggler whose chain rotated again within grace (its successor is already dead) is still benign → 200, no family revoke', async () => {
+    // Finding 1: three tabs share T0. Tab A rotates T0→T1; another tab rotates
+    // T1→T2. A slow first-race loser then re-presents T0 — still inside the grace
+    // window, replacedByTokenHash set, but T1 (its immediate successor) is gone.
+    // This must NOT nuke the family / the live T2.
+    const req = reqWith({
+      tokenHash: sha256('the-raw-token'),
+      revokedAt: new Date(Date.now() - 2_000), // rotated ~2s ago — well inside grace
+      replacedByTokenHash: 'successor-hash',   // it WAS rotated (not a logout revoke);
+      expiresAt: new Date(Date.now() + 86_400_000), // the successor itself may be long gone
+      userId: 'u-acme',
+      user: userRow,
+    });
+    const res = mockRes();
+
+    await refresh(req, res);
+
+    expect(typeof (res.body as Record<string, unknown>).accessToken).toBe('string');
+    expect(res.cookies.some((c) => c.name === 'ds_refresh')).toBe(false);
+    expect(res.clearedCookies).toHaveLength(0);
+    const rt = (req.prisma as { refreshToken: { updateMany: ReturnType<typeof vi.fn> } }).refreshToken;
+    expect(rt.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a token killed by logout / change-password (replacedByTokenHash null), even within grace → 401', async () => {
+    // A null successor link means the token was bulk-revoked, not rotated — that
+    // is always a hard stop, grace window or not.
+    const req = reqWith({
+      tokenHash: sha256('the-raw-token'),
+      revokedAt: new Date(Date.now() - 500), // just now, but…
+      replacedByTokenHash: null,             // …no rotation link → not a concurrent refresh
+      expiresAt: new Date(Date.now() + 86_400_000),
+      userId: 'u-acme',
+      user: userRow,
+    });
     const res = mockRes();
 
     await expect(refresh(req, res)).rejects.toMatchObject({ statusCode: 401 });
@@ -314,7 +327,7 @@ describe('refresh', () => {
     );
   });
 
-  it('a lost rotation race whose successor is live → 200 + access token, cookie & family untouched', async () => {
+  it('a lost rotation race, re-read shows it was rotated within grace → 200 + access token, cookie & family untouched', async () => {
     const req = reqWith(
       {
         tokenHash: sha256('the-raw-token'),
@@ -325,7 +338,6 @@ describe('refresh', () => {
       },
       {
         rotateCount: 0, // lost the conditional revoke
-        successorLive: true,
         spentReadback: {
           replacedByTokenHash: 'successor-hash',
           revokedAt: new Date(Date.now() - 200), // the winner revoked it moments ago
@@ -343,7 +355,7 @@ describe('refresh', () => {
     expect(rt.updateMany).not.toHaveBeenCalled();
   });
 
-  it('a lost rotation race with no live successor → 401 + family revoke', async () => {
+  it('a lost rotation race where the re-read shows a logout revoke (no rotation link) → 401 + family revoke', async () => {
     const req = reqWith(
       {
         tokenHash: sha256('the-raw-token'),
@@ -354,7 +366,6 @@ describe('refresh', () => {
       },
       {
         rotateCount: 0,
-        successorLive: false,
         spentReadback: { replacedByTokenHash: null, revokedAt: new Date(Date.now() - 200) },
       },
     );
