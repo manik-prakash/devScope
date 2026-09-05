@@ -16,7 +16,7 @@ const FEATURES_MENU: MegaColumn[] = [
     heading: 'Capture',
     items: [
       { label: 'Session recording',  href: '#features', desc: 'Capture prompts and tool calls locally' },
-      { label: 'Multi-agent',        href: '#features', desc: 'Claude, Codex, Cursor, Copilot' },
+      { label: 'Multi-agent',        href: '#features', desc: 'Claude Code and Codex, more agents shipping soon' },
     ],
   },
   {
@@ -145,9 +145,8 @@ export function Nav() {
               Features
             </button>
           </div>
-          <NavLink href="/#how">    How it works </NavLink>
-          <NavLink href="/#pricing">Pricing      </NavLink>
-          <NavLink href="/docs">    Docs         </NavLink>
+          <NavLink href="/#how">How it works</NavLink>
+          <NavLink href="/docs">Docs</NavLink>
         </nav>
 
         {/* Right CTAs */}

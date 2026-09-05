@@ -265,7 +265,7 @@ function Sidebar() {
 
 export default function DocsPage() {
   return (
-    <div style={{ background: 'var(--bg)' }}>
+    <div className="ds-landing" style={{ background: 'var(--bg)' }}>
       <AnnouncementBar />
       <Nav />
 
@@ -380,8 +380,8 @@ $ devscope run claude code           POST /api/v1/cli/sessions  /dashboard
               <CodeBlock>{`# macOS / Linux
 curl -fsSL https://devscope.dev/install.sh | sh
 
-# or build from source (Go 1.22+)
-go install github.com/manik-prakash/devscope/cli@latest`}</CodeBlock>
+# or build from source (Go 1.26+)
+go install github.com/manik-prakash/devscope-cli@latest`}</CodeBlock>
 
               <H3>2. Authenticate</H3>
               <P>
@@ -726,13 +726,13 @@ NEXT_PUBLIC_API_URL=https://api.your-domain.example.com/api/v1`}</CodeBlock>
               <H3>First-run setup</H3>
               <CodeBlock>{`# 1. Apply database schema
 cd backend
-npx prisma migrate deploy
+pnpm db:migrate:deploy
 
-# 2. Seed an initial organization + manager account
-npm run seed -- --org "Acme" --email you@acme.dev
+# 2. Seed the demo organization
+pnpm db:seed
 
 # 3. Start the backend
-npm run start
+pnpm start
 
 # 4. Start the frontend
 cd ../frontend
@@ -741,9 +741,12 @@ npm run build && npm run start
 # 5. Log in at https://your-dashboard.example.com/login`}</CodeBlock>
 
               <Callout kind="warn">
-                The seed script prints the initial manager&apos;s temporary password to
-                stdout exactly once. Capture it before the process exits — there is no
-                way to recover it afterward, only to reset it via the database.
+                The seed is idempotent and always creates the same fixed demo org
+                (<Mono>demo</Mono>) and two accounts — <Mono>admin@demo.test</Mono> and{' '}
+                <Mono>dev@demo.test</Mono>, both with the password{' '}
+                <Mono>demo-password-123</Mono> — printed to stdout on every run. Change
+                these credentials after your first login if you&apos;re deploying
+                somewhere reachable.
               </Callout>
             </section>
 

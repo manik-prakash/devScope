@@ -1,4 +1,8 @@
 import Link from 'next/link'
+import { GitBranch } from 'lucide-react'
+import { Logo } from '@/components/shared'
+
+const GITHUB_URL = 'https://github.com/manik-prakash/devScope'
 
 const COLUMNS = [
   {
@@ -6,8 +10,6 @@ const COLUMNS = [
     links: [
       { label: 'Features',     href: '#features' },
       { label: 'How it works', href: '#how'      },
-      { label: 'Pricing',      href: '#pricing'  },
-      { label: 'Changelog',    href: '/docs'     },
     ],
   },
   {
@@ -19,22 +21,6 @@ const COLUMNS = [
       { label: 'Self-host',  href: '/docs#self-host'       },
     ],
   },
-  {
-    heading: 'Company',
-    links: [
-      { label: 'About',   href: '#'      },
-      { label: 'Contact', href: '#'      },
-      { label: 'GitHub',  href: '#'      },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy', href: '#' },
-      { label: 'Terms',   href: '#' },
-      { label: 'License', href: '#' },
-    ],
-  },
 ]
 
 export function Footer() {
@@ -44,7 +30,25 @@ export function Footer() {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-[1.3fr_1fr_1fr]">
+          {/* Brand block */}
+          <div>
+            <Logo size={20} />
+            <p className="mt-3 max-w-xs text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              Analytics for how your team actually ships with AI agents.
+            </p>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center gap-1.5 text-sm transition-colors duration-150"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <GitBranch size={15} />
+              GitHub
+            </a>
+          </div>
+
           {COLUMNS.map((col) => (
             <div key={col.heading}>
               <h3

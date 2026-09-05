@@ -93,8 +93,7 @@ function Hero() {
             style={{ color: 'var(--text-muted)' }}
           >
             Capture, score, and visualize every session your developers run with
-            Claude, Codex, Cursor, and Copilot — without sending source code off
-            the box.
+            Claude Code and Codex — without sending source code off the box.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -176,25 +175,55 @@ function FeatureStrip() {
 
 const FEATURE_CARDS = [
   {
-    icon:  Lock,
-    title: 'Privacy-first by default',
-    body:  'Sessions are captured and redacted on the developer machine. Source code, environment variables, and secrets never leave the box.',
-  },
-  {
     icon:  Sparkles,
     title: 'LLM-graded quality scores',
     body:  'Every session gets a 0–100 score across prompt quality, iteration efficiency, and tool utilization — with concrete feedback.',
+    size:  'lg' as const,
+  },
+  {
+    icon:  Lock,
+    title: 'Privacy-first by default',
+    body:  'Sessions are captured and redacted on the developer machine. Source code, environment variables, and secrets never leave the box.',
+    size:  'sm' as const,
   },
   {
     icon:  BarChart3,
     title: 'Two dashboards, one source',
     body:  'Managers see team-wide rollups. Developers see their own progress. Same data, scoped to your role.',
+    size:  'sm' as const,
   },
 ]
 
+const SCORE_DIMENSIONS = [
+  { label: 'Prompt Quality',        value: 87 },
+  { label: 'Iteration Efficiency',  value: 74 },
+  { label: 'Tool Utilization',      value: 91 },
+]
+
+function ScoreDimensionBars() {
+  return (
+    <div className="mt-6 space-y-3">
+      {SCORE_DIMENSIONS.map((dim) => (
+        <div key={dim.label}>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span style={{ color: 'var(--text-muted)' }}>{dim.label}</span>
+            <span className="font-mono" style={{ color: 'var(--text-faint)' }}>{dim.value}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${dim.value}%`, background: 'var(--accent-gradient)' }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function FeatureCards() {
   return (
-    <section id="features" className="py-24">
+    <section id="features" className="py-20">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           eyebrow="Why DevScope"
@@ -202,27 +231,31 @@ function FeatureCards() {
           subtitle="Move from gut-feel to grounded data. See which agents perform best, who is iterating efficiently, and where workflows break down."
         />
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURE_CARDS.map((card) => (
-            <div
-              key={card.title}
-              className="rounded border p-8 transition-colors duration-150"
-              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-            >
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2">
+          {FEATURE_CARDS.map((card) => {
+            const large = card.size === 'lg'
+            return (
               <div
-                className="mb-5 flex h-9 w-9 items-center justify-center rounded"
-                style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
+                key={card.title}
+                className={`rounded border transition-colors duration-150 ${large ? 'p-10 sm:col-span-2 lg:col-span-2 lg:row-span-2' : 'p-8'}`}
+                style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
               >
-                <card.icon size={18} />
+                <div
+                  className="mb-5 flex h-9 w-9 items-center justify-center rounded"
+                  style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
+                >
+                  <card.icon size={18} />
+                </div>
+                <h3 className={large ? 'text-h2' : 'text-h3'} style={{ color: 'var(--text)' }}>
+                  {card.title}
+                </h3>
+                <p className="mt-2 max-w-md text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                  {card.body}
+                </p>
+                {large && <ScoreDimensionBars />}
               </div>
-              <h3 className="text-h3" style={{ color: 'var(--text)' }}>
-                {card.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                {card.body}
-              </p>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </section>
@@ -269,7 +302,7 @@ function HowItWorks() {
   return (
     <section
       id="how"
-      className="border-t py-24"
+      className="border-t py-20"
       style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
     >
       <div className="mx-auto max-w-6xl px-6">
@@ -279,7 +312,7 @@ function HowItWorks() {
           subtitle="DevScope is built around a thin CLI that does the heavy lifting locally — and a backend that only ever sees the metadata you choose to send."
         />
 
-        <ol className="mx-auto max-w-3xl space-y-6">
+        <ol className="mx-auto max-w-3xl space-y-4">
           {HOW_STEPS.map((step, i) => {
             const reversed = i % 2 === 1
             return (
@@ -329,7 +362,7 @@ function HowItWorks() {
 
 function FinalCTA() {
   return (
-    <section className="py-24">
+    <section className="py-20">
       <div className="mx-auto max-w-3xl px-6 text-center">
         <Server size={32} className="mx-auto mb-5" style={{ color: 'var(--accent)' }} />
         <h2 className="text-h1" style={{ color: 'var(--text)' }}>
@@ -364,7 +397,7 @@ function FinalCTA() {
 
 export default function HomePage() {
   return (
-    <div style={{ background: 'var(--bg)' }}>
+    <div className="ds-landing" style={{ background: 'var(--bg)' }}>
       <AnnouncementBar />
       <Nav />
       <main>

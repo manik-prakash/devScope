@@ -127,9 +127,20 @@ function SessionContent({ session }: { session: Session }) {
       {/* ── Score breakdown ── */}
       <section className="border-b p-6" style={{ borderColor: 'var(--border)' }}>
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-faint)' }}>
-            Score breakdown
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-faint)' }}>
+              Score breakdown
+            </p>
+            {!session.scoreDetail && (
+              <span
+                className="rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-faint)', background: 'var(--surface-2)' }}
+                title="Estimated from session stats — the LLM evaluator has not produced per-dimension scores for this session."
+              >
+                Estimated
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {session.evaluationStatus === 'PENDING' && (
               <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
