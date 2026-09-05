@@ -53,6 +53,6 @@ changelog:
 release:
   github:
     owner: manik-prakash
-    name: devscope-cli
+    name: devScope
   draft: true
   prerelease: auto
