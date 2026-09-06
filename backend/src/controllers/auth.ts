@@ -15,14 +15,17 @@ const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex'
 
 /**
  * `ds_refresh` is HttpOnly (JS can't read it — an XSS payload can't exfiltrate
- * it) and lives only in the cookie: it is never returned in a JSON body. The
- * Next.js rewrite makes `/api/v1/*` same-origin, so `SameSite=Lax` is enough.
+ * it) and lives only in the cookie: it is never returned in a JSON body. When
+ * the Next.js rewrite fronts the API, `/api/v1/*` is same-origin and
+ * `SameSite=Lax` is enough. When `CROSS_SITE_COOKIES` is set (the frontend
+ * calls this origin directly, no same-origin proxy in front), the cookie must
+ * be `SameSite=None; Secure` instead to ride a cross-site request at all.
  */
 function setRefreshCookie(res: Response, rawToken: string, expiresAt: Date): void {
   res.cookie(REFRESH_COOKIE, rawToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: env.CROSS_SITE_COOKIES || env.NODE_ENV === 'production',
+    sameSite: env.CROSS_SITE_COOKIES ? 'none' : 'lax',
     path: '/',
     expires: expiresAt,
   });

@@ -58,6 +58,21 @@ const envSchema = z.object({
 
   // ── CORS ─────────────────────────────────────────────────────────────────
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
+
+  // ── Cross-origin deployment ─────────────────────────────────────────────
+  // Set true when the frontend and backend are on different origins (no
+  // same-origin Next.js rewrite in front) so the ds_refresh cookie is issued
+  // as SameSite=None; Secure instead of the same-origin-only SameSite=Lax.
+  CROSS_SITE_COOKIES: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  // ── Cron ─────────────────────────────────────────────────────────────────
+  // Vercel Cron sends this exact env var's value as `Authorization: Bearer
+  // <value>` to routes it invokes on schedule — required only when the
+  // reconcile sweep runs via Vercel Cron rather than the in-process interval.
+  CRON_SECRET: z.string().min(1, 'CRON_SECRET is required').optional(),
 })
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,15 @@ declare global {
 }
 
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({ connectionString: env.DATABASE_URL })
+  // In production (a serverless deployment) cap each function instance to one
+  // real connection — a pooled DATABASE_URL (pgbouncer/Neon pooler) multiplexes
+  // those across the many concurrent instances Vercel can spin up. Local dev
+  // talks straight to docker-compose Postgres with no pooler in front, so it
+  // keeps pg's default pool size.
+  const adapter = new PrismaPg({
+    connectionString: env.DATABASE_URL,
+    ...(env.NODE_ENV === 'production' ? { max: 1 } : {}),
+  })
   return new PrismaClient({
     adapter,
     log:

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "postinstall": "prisma generate",
     "build": "tsc --project tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run",

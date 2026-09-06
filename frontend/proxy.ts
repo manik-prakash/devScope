@@ -9,11 +9,16 @@ const AUTH_ROUTES = ['/login', '/signup']
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  const refreshToken    = req.cookies.get('ds_refresh')?.value
   const role            = req.cookies.get('ds_role')?.value as 'ADMIN' | 'MANAGER' | 'DEVELOPER' | undefined
   const mustChangePass  = req.cookies.get('ds_must_change')?.value === '1'
 
-  const isLoggedIn = Boolean(refreshToken)
+  // ds_refresh is HttpOnly and backend-owned — when the backend is a
+  // cross-origin deployment (no same-origin Next.js rewrite in front) it only
+  // ever lives on the backend's domain and never reaches this proxy. ds_role
+  // is set by the frontend itself (lib/auth.ts) at the same moments a session
+  // becomes valid, so it survives regardless of topology. Already documented
+  // as spoofable/defense-in-depth only — same trust level ds_refresh had here.
+  const isLoggedIn = Boolean(role)
 
   const isManagerRoute   = MANAGER_ROUTES.some((r) => pathname.startsWith(r))
   const isDeveloperRoute = DEVELOPER_ROUTES.some((r) => pathname.startsWith(r))

@@ -5,6 +5,7 @@ import cliRouter from './cli.js';
 import managerRouter from './manager.js';
 import developerRouter from './developer.js';
 import adminRouter from './admin.js';
+import internalRouter from './internal.js';
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use('/cli', cliRouter);
 router.use('/manager', managerRouter);
 router.use('/developer', developerRouter);
 router.use('/admin', adminRouter);
+router.use('/internal', internalRouter);
 
 export default router;
