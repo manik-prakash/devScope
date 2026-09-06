@@ -18,7 +18,7 @@ import express, {
   type Response,
   type NextFunction,
 } from 'express'
-import helmet from 'helmet'
+import helmetImport from 'helmet'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 
@@ -29,6 +29,19 @@ import { logger } from './config/logger.js'
 
 // Routes (mounted after all middleware is registered)
 import v1Router from './routes/index.js'
+
+// helmet's package.json declares a top-level "types" field alongside an
+// "exports" map with "import"/"require" conditions but no per-condition
+// "types" — a shape that trips a long-standing TypeScript NodeNext
+// dual-package resolution bug (microsoft/TypeScript#50466, helmetjs/helmet
+// #414): the import can resolve to an untyped module shape instead of its
+// real declaration, so `helmet()` errors as "not callable". Observed only on
+// Vercel's build machine, not with the same TS/helmet/Node versions locally —
+// assert the known-correct runtime shape directly rather than depend on that
+// resolution; the emitted JS is identical either way.
+const helmet = helmetImport as unknown as (
+  options?: Record<string, unknown>,
+) => (req: Request, res: Response, next: NextFunction) => void
 
 // ---------------------------------------------------------------------------
 // App factory
