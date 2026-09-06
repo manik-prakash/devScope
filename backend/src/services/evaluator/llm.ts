@@ -10,7 +10,13 @@
  *   - never throws — returns { ok: false, reason } after two failed attempts
  */
 
-import OpenAI from 'openai';
+// Named import, not default: openai's dual CJS/ESM package.json makes the
+// default export hit the same TypeScript NodeNext dual-package resolution bug
+// as helmet did in app.ts (microsoft/TypeScript#50466) — "not constructable"
+// on Vercel's build machine only. The named `OpenAI` export (openai also
+// re-exports it that way) resolves through a plain named-export path that
+// isn't affected.
+import { OpenAI } from 'openai';
 import type { ZodTypeAny, z } from 'zod';
 import { env } from '../../config/env.js';
 import { MODEL } from './prompts.js';
