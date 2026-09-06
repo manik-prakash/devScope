@@ -2,5 +2,5 @@
   "installCommand": "pnpm install",
   "buildCommand": "pnpm run build",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "crons": [{ "path": "/api/v1/internal/reconcile", "schedule": "*/10 * * * *" }]
+  "crons": [{ "path": "/api/v1/internal/reconcile", "schedule": "0 3 * * *" }]
 }
